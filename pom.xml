@@ -42,6 +42,10 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.0.0-M9</version>  <!-- Use the latest version -->
+                <configuration>
+                    <redirectTestOutputToFile>true</redirectTestOutputToFile>
+                    <printSummary>true</printSummary>
+                </configuration>
             </plugin>
         </plugins>
     </build>
