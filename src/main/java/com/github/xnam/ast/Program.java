@@ -19,4 +19,12 @@ public class Program implements Node{
         return statements.isEmpty() ? "" : statements.get(0).tokenLiteral();
     }
 
+    public String toString() {
+        StringBuilder output = new StringBuilder();
+        for (Statement s : statements) {
+            output.append(s.toString());
+        }
+        return output.toString();
+    }
+
 }

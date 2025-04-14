@@ -16,4 +16,11 @@ public class ReturnStatement implements Statement {
 
     public void statementNode() {}
     public String tokenLiteral() { return token.getLiteral(); }
+    public String toString() {
+        StringBuilder output = new StringBuilder();
+        output.append(tokenLiteral()).append(" ");
+//        if (returnValue != null) output.append(returnValue.toString());
+        output.append(";");
+        return output.toString();
+    }
 }

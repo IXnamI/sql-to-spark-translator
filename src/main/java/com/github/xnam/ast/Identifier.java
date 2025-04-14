@@ -20,4 +20,6 @@ public class Identifier implements Expression {
     }
 
     public void expressionNode() {}
+
+    public String toString() { return value; }
 }

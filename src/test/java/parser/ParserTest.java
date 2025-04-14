@@ -1,16 +1,12 @@
 package parser;
 
-import com.github.xnam.ast.LetStatement;
-import com.github.xnam.ast.Program;
-import com.github.xnam.ast.Statement;
+import com.github.xnam.ast.*;
 import com.github.xnam.lexer.Lexer;
 import com.github.xnam.parser.Parser;
-import lombok.extern.java.Log;
 import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -55,13 +51,50 @@ public class ParserTest {
         assertEquals(program.statements.size(), 3);
 
         List<String> expectedOutput = new ArrayList<>();
-        expectedOutput.add("x");
-        expectedOutput.add("y");
-        expectedOutput.add("foobar");
+        expectedOutput.add("5");
+        expectedOutput.add("10");
+        expectedOutput.add("838383");
 
         for (int i = 0; i < expectedOutput.size(); ++i) {
-            testLetStatement(program.statements.get(i), expectedOutput.get(i));
+            testReturnStatement(program.statements.get(i), expectedOutput.get(i));
         }
+    }
+
+    @Test
+    public void testIdentifierExpression() {
+        String input = "foobar;";
+        Lexer lexer = new Lexer(input);
+        Parser parser = new Parser(lexer);
+        Program program = parser.parseProgram();
+        checkParserErrors(parser);
+        assert(program != null);
+        assertEquals(program.getStatements().size(), 1);
+        assert(program.getStatements().get(0).getClass() == ExpressionStatement.class);
+        ExpressionStatement stmt = (ExpressionStatement) program.getStatements().get(0);
+        assert(stmt.getExpression().getClass() == Identifier.class);
+        Identifier ident = (Identifier) stmt.getExpression();
+        assertEquals(ident.getValue(), "foobar");
+        assertEquals(ident.tokenLiteral(), "foobar");
+    }
+
+    @Test
+    public void testIntegerLiteralExpression() {
+        String input = "5;";
+
+        Lexer lexer = new Lexer(input);
+        Parser parser = new Parser(lexer);
+
+        Program program = parser.parseProgram();
+        checkParserErrors(parser);
+
+        assert(program != null);
+        assertEquals(program.getStatements().size(), 1);
+        assert(program.getStatements().get(0).getClass() == ExpressionStatement.class);
+        ExpressionStatement stmt = (ExpressionStatement) program.getStatements().get(0);
+        assert(stmt.getExpression().getClass() == IntegerLiteral.class);
+        IntegerLiteral literal =  (IntegerLiteral) stmt.getExpression();
+        assertEquals(literal.getValue(), (Integer) 5);
+        assertEquals(literal.tokenLiteral(), "5");
     }
 
     private void checkParserErrors(Parser p) {
@@ -79,5 +112,10 @@ public class ParserTest {
         assertEquals(LetStatement.class, s.getClass(), "Statement not of type LetStatement");
         assertEquals(name, ((LetStatement) s).getName().getValue(), "LetStatement.Name.Value is not as expected");
         assertEquals(name, ((LetStatement) s).getName().tokenLiteral(), "LetStatement.Name.TokenLiteral is not as expected");
+    }
+
+    private void testReturnStatement(Statement s, String returnValue) {
+        assertEquals("return", s.tokenLiteral(), "TokenLiteral not 'return'");
+        assertEquals(ReturnStatement.class, s.getClass(), "Statement not of type ReturnStatement");
     }
 }

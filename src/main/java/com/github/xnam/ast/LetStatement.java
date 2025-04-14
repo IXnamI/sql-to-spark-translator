@@ -15,10 +15,16 @@ public class LetStatement implements Statement{
        this.token = token;
     }
 
-    public String tokenLiteral() {
-        return token.getLiteral();
-    }
+    public String tokenLiteral() { return token.getLiteral(); }
     public void statementNode() {}
+    public String toString() {
+        StringBuilder output = new StringBuilder();
+        output.append(token.getLiteral()).append(" ");
+        output.append(name.toString()).append(" = ");
+        if (value != null) output.append(value.toString());
+        output.append(";");
+        return output.toString();
+    }
 
     @Override
     public boolean equals(Object anotherObject) {
@@ -30,8 +36,4 @@ public class LetStatement implements Statement{
         return getName().tokenLiteral().equals(anotherLetStatement.getName().tokenLiteral());
     }
 
-    @Override
-    public String toString() {
-        return "LetStatement {Token: "+ token + ", Name: " + name + "}";
-    }
 }
