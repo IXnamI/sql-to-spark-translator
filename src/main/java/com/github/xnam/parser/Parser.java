@@ -4,11 +4,9 @@ import com.github.xnam.ast.*;
 import com.github.xnam.token.Token;
 import com.github.xnam.lexer.Lexer;
 import com.github.xnam.token.TokenType;
+import com.sun.xml.internal.bind.v2.runtime.output.StAXExStreamWriterOutput;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -19,6 +17,7 @@ public class Parser {
     List<String> errors;
     Map<String, Function<Expression, Expression>> infixParseFns;
     Map<String, Supplier<Expression>> prefixParseFns;
+    public static final Map<String, Integer> precedences = createPrecedenceMap();
 
     public Parser(Lexer lexer) {
         this.lexer = lexer;
@@ -27,6 +26,16 @@ public class Parser {
         prefixParseFns = new HashMap<>();
         registerPrefix(TokenType.IDENT, this::parseIdentifier);
         registerPrefix(TokenType.INT, this::parseIntegerLiteral);
+        registerPrefix(TokenType.BANG, this::parsePrefixExpression);
+        registerPrefix(TokenType.MINUS, this::parsePrefixExpression);
+        registerInfix(TokenType.PLUS, this::parseInfixExpression);
+        registerInfix(TokenType.MINUS, this::parseInfixExpression);
+        registerInfix(TokenType.SLASH, this::parseInfixExpression);
+        registerInfix(TokenType.ASTERISK, this::parseInfixExpression);
+        registerInfix(TokenType.EQ, this::parseInfixExpression);
+        registerInfix(TokenType.NOT_EQ, this::parseInfixExpression);
+        registerInfix(TokenType.LT, this::parseInfixExpression);
+        registerInfix(TokenType.GT, this::parseInfixExpression);
         nextToken();
         nextToken();
     }
@@ -99,8 +108,20 @@ public class Parser {
     }
     private Expression parseExpression(int precedence) {
         Supplier<Expression> prefixParseFn = prefixParseFns.getOrDefault(curToken.getType(), null);
-        if (prefixParseFn == null) return null;
+        if (prefixParseFn == null) {
+            noPrefixParseFunctionError(curToken.getType());
+            return null;
+        }
         Expression leftExp = prefixParseFn.get();
+        while(!peekTokenIs(TokenType.SEMICOLON) && (precedence < peekPrecedence())) {
+            Function<Expression, Expression> infixParseFn = infixParseFns.getOrDefault(peekToken.getType(), null);
+            if (infixParseFn == null) {
+                return leftExp;
+            }
+            nextToken();
+
+            leftExp = infixParseFn.apply(leftExp);
+        }
         return leftExp;
     }
 
@@ -121,6 +142,23 @@ public class Parser {
         assert literal.getValue() != null : "This value cannot be null";
         return literal;
     }
+
+    public Expression parsePrefixExpression() {
+        PrefixExpression prefExpr = new PrefixExpression(curToken);
+        nextToken();
+        prefExpr.setRightExpression(parseExpression(Precedence.PREFIX));
+        return prefExpr;
+    }
+
+    public Expression parseInfixExpression(Expression leftExpression) {
+        InfixExpression expr = new InfixExpression(curToken);
+        expr.setLeftExpression(leftExpression);
+        int precedence = curPrecedence();
+        nextToken();
+        expr.setRightExpression(parseExpression(precedence));
+        return expr;
+    }
+
     private boolean expectPeek(String tokType) {
         if (peekTokenIs(tokType)) {
             nextToken();
@@ -138,6 +176,14 @@ public class Parser {
         return peekToken.getType().equals(tokType);
     }
 
+    private int peekPrecedence() {
+        return precedences.getOrDefault(peekToken.getType(), Precedence.LOWEST);
+    }
+
+    private int curPrecedence() {
+        return precedences.getOrDefault(curToken.getType(), Precedence.LOWEST);
+    }
+
     public List<String> Errors() {
         return errors;
     }
@@ -145,5 +191,23 @@ public class Parser {
     public void peekError(String tokType) {
         String msg = String.format("Expected next token to be %s, got %s instead", tokType, peekToken.getType());
         errors.add(msg);
+    }
+
+    public void noPrefixParseFunctionError(String tokType) {
+        String msg = String.format("No prefix parse function for %s was found", tokType);
+        errors.add(msg);
+    }
+
+    private static Map<String, Integer> createPrecedenceMap() {
+        Map<String, Integer> map = new HashMap<>();
+        map.put(TokenType.EQ, Precedence.EQUALS);
+        map.put(TokenType.NOT_EQ, Precedence.EQUALS);
+        map.put(TokenType.LT, Precedence.LESSGREATER);
+        map.put(TokenType.GT, Precedence.LESSGREATER);
+        map.put(TokenType.PLUS, Precedence.SUM);
+        map.put(TokenType.MINUS, Precedence.SUM);
+        map.put(TokenType.SLASH, Precedence.PRODUCT);
+        map.put(TokenType.ASTERISK, Precedence.PRODUCT);
+        return Collections.unmodifiableMap(map);
     }
 }
