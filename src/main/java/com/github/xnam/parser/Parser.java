@@ -1,10 +1,11 @@
 package com.github.xnam.parser;
 
 import com.github.xnam.ast.*;
+import com.github.xnam.ast.Boolean;
 import com.github.xnam.token.Token;
 import com.github.xnam.lexer.Lexer;
 import com.github.xnam.token.TokenType;
-import com.sun.xml.internal.bind.v2.runtime.output.StAXExStreamWriterOutput;
+import com.github.xnam.utils.LoggingUtils;
 
 import java.util.*;
 import java.util.function.Function;
@@ -15,6 +16,7 @@ public class Parser {
     Token curToken;
     Token peekToken;
     List<String> errors;
+    List<String> debug;
     Map<String, Function<Expression, Expression>> infixParseFns;
     Map<String, Supplier<Expression>> prefixParseFns;
     public static final Map<String, Integer> precedences = createPrecedenceMap();
@@ -22,12 +24,17 @@ public class Parser {
     public Parser(Lexer lexer) {
         this.lexer = lexer;
         this.errors = new ArrayList<>();
+        this.debug = new ArrayList<>();
         infixParseFns = new HashMap<>();
         prefixParseFns = new HashMap<>();
         registerPrefix(TokenType.IDENT, this::parseIdentifier);
         registerPrefix(TokenType.INT, this::parseIntegerLiteral);
         registerPrefix(TokenType.BANG, this::parsePrefixExpression);
         registerPrefix(TokenType.MINUS, this::parsePrefixExpression);
+        registerPrefix(TokenType.TRUE, this::parseBoolean);
+        registerPrefix(TokenType.FALSE, this::parseBoolean);
+        registerPrefix(TokenType.LPAREN, this::parseGroupedExpression);
+        registerPrefix(TokenType.IF, this::parseIfExpression);
         registerInfix(TokenType.PLUS, this::parseInfixExpression);
         registerInfix(TokenType.MINUS, this::parseInfixExpression);
         registerInfix(TokenType.SLASH, this::parseInfixExpression);
@@ -69,10 +76,6 @@ public class Parser {
                 return parseLetStatement();
             case TokenType.RETURN:
                 return parseReturnStatement();
-            case TokenType.IF:
-                return null;
-            case TokenType.ELSE:
-                return null;
             default:
                 return parseExpressionStatement();
         }
@@ -143,19 +146,58 @@ public class Parser {
         return literal;
     }
 
-    public Expression parsePrefixExpression() {
+    private Expression parseBoolean() {
+        return new Boolean(curToken);
+    }
+
+    private Expression parseIfExpression() {
+        IfExpression ifExpr = new IfExpression(curToken);
+        if (!expectPeek(TokenType.LPAREN)) return null;
+        ifExpr.setCondition(parseExpression(Precedence.LOWEST));
+        if (!expectPeek(TokenType.LBRACE)) return null;
+        ifExpr.setConsequence(parseBlockStatement());
+        if (peekTokenIs(TokenType.ELSE)) {
+            nextToken();
+            if (!expectPeek(TokenType.LBRACE)) return null;
+            ifExpr.setAlternative(parseBlockStatement());
+        }
+        return ifExpr;
+    }
+
+    private BlockStatement parseBlockStatement() {
+        BlockStatement block = new BlockStatement(curToken);
+        nextToken();
+        while (!curTokenIs(TokenType.RBRACE) && !curTokenIs(TokenType.EOF)) {
+            Statement stmt = parseStatement();
+            assert stmt != null : "Failed to parse statement";
+            block.getStatements().add(stmt);
+            nextToken();
+        }
+        return block;
+    }
+
+    private Expression parsePrefixExpression() {
         PrefixExpression prefExpr = new PrefixExpression(curToken);
         nextToken();
         prefExpr.setRightExpression(parseExpression(Precedence.PREFIX));
         return prefExpr;
     }
 
-    public Expression parseInfixExpression(Expression leftExpression) {
+    private Expression parseInfixExpression(Expression leftExpression) {
         InfixExpression expr = new InfixExpression(curToken);
         expr.setLeftExpression(leftExpression);
         int precedence = curPrecedence();
         nextToken();
         expr.setRightExpression(parseExpression(precedence));
+        return expr;
+    }
+
+    private Expression parseGroupedExpression() {
+        nextToken();
+        Expression expr = parseExpression(Precedence.LOWEST);
+        if (!expectPeek(TokenType.RPAREN)) {
+            return null;
+        }
         return expr;
     }
 
@@ -188,6 +230,14 @@ public class Parser {
         return errors;
     }
 
+    public List<String> Debug() {
+        return debug;
+    }
+
+    private void addDebugStatement(String msg) {
+        debug.add(msg);
+    }
+
     public void peekError(String tokType) {
         String msg = String.format("Expected next token to be %s, got %s instead", tokType, peekToken.getType());
         errors.add(msg);
@@ -196,6 +246,16 @@ public class Parser {
     public void noPrefixParseFunctionError(String tokType) {
         String msg = String.format("No prefix parse function for %s was found", tokType);
         errors.add(msg);
+    }
+
+    public static String logWithLocation(String message) {
+        StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
+        // Index 2 usually points to the caller of this method
+        StackTraceElement element = stackTrace[2];
+        String fileName = element.getFileName();
+        int lineNumber = element.getLineNumber();
+
+        return String.format("[%s:%d] %s", fileName, lineNumber, message);
     }
 
     private static Map<String, Integer> createPrecedenceMap() {
