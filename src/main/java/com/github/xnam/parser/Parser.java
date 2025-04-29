@@ -6,6 +6,7 @@ import com.github.xnam.token.Token;
 import com.github.xnam.lexer.Lexer;
 import com.github.xnam.token.TokenType;
 import com.github.xnam.utils.LoggingUtils;
+import com.sun.javafx.util.Logging;
 
 import java.util.*;
 import java.util.function.Function;
@@ -35,6 +36,7 @@ public class Parser {
         registerPrefix(TokenType.FALSE, this::parseBoolean);
         registerPrefix(TokenType.LPAREN, this::parseGroupedExpression);
         registerPrefix(TokenType.IF, this::parseIfExpression);
+        registerPrefix(TokenType.FUNCTION, this::parseFunctionLiteral);
         registerInfix(TokenType.PLUS, this::parseInfixExpression);
         registerInfix(TokenType.MINUS, this::parseInfixExpression);
         registerInfix(TokenType.SLASH, this::parseInfixExpression);
@@ -43,6 +45,7 @@ public class Parser {
         registerInfix(TokenType.NOT_EQ, this::parseInfixExpression);
         registerInfix(TokenType.LT, this::parseInfixExpression);
         registerInfix(TokenType.GT, this::parseInfixExpression);
+        registerInfix(TokenType.LPAREN, this::parseCallExpression);
         nextToken();
         nextToken();
     }
@@ -85,9 +88,7 @@ public class Parser {
         ReturnStatement stmt = new ReturnStatement(curToken);
         nextToken();
         stmt.setReturnValue(parseExpression(Precedence.LOWEST));
-        while (!curTokenIs(TokenType.SEMICOLON)) {
-            nextToken();
-        }
+        if (!expectPeek(TokenType.SEMICOLON)) return null;
         return stmt;
     }
 
@@ -96,9 +97,9 @@ public class Parser {
         if (!expectPeek(TokenType.IDENT)) return null;
         stmt.setName(new Identifier(curToken, curToken.getLiteral()));
         if (!expectPeek(TokenType.ASSIGN)) return null;
-        while (!curTokenIs(TokenType.SEMICOLON)) {
-            nextToken();
-        }
+        nextToken();
+        stmt.setValue(parseExpression(Precedence.LOWEST));
+        if (!expectPeek(TokenType.SEMICOLON)) return null;
         return stmt;
     }
 
@@ -164,6 +165,31 @@ public class Parser {
         return ifExpr;
     }
 
+    private Expression parseFunctionLiteral() {
+        FunctionLiteral function = new FunctionLiteral(curToken);
+        if (!expectPeek(TokenType.LPAREN)) return null;
+        function.getParams().addAll(parseFunctionParameters());
+        if (!expectPeek(TokenType.LBRACE)) return null;
+        function.setBody(parseBlockStatement());
+        return function;
+    }
+
+    private List<Identifier> parseFunctionParameters() {
+        List<Identifier> identList = new ArrayList<>();
+        if (peekTokenIs(TokenType.RPAREN)) {
+            nextToken();
+            return identList;
+        }
+        while(!curTokenIs(TokenType.RPAREN)) {
+            nextToken();
+            Identifier ident = (Identifier) parseIdentifier();
+            identList.add(ident);
+            assert peekTokenIs(TokenType.COMMA) || peekTokenIs(TokenType.RPAREN);
+            nextToken();
+        }
+        return identList;
+    }
+
     private BlockStatement parseBlockStatement() {
         BlockStatement block = new BlockStatement(curToken);
         nextToken();
@@ -174,6 +200,30 @@ public class Parser {
             nextToken();
         }
         return block;
+    }
+
+    private Expression parseCallExpression(Expression func) {
+        CallExpression callExp = new CallExpression(curToken);
+        callExp.setFunction(func);
+        if (peekTokenIs(TokenType.RPAREN)) {
+            return callExp;
+        }
+        callExp.setArguments(parseCallArguments());
+        return callExp;
+    }
+
+    private List<Expression> parseCallArguments() {
+        List<Expression> argsList = new ArrayList<>();
+        nextToken();
+        argsList.add(parseExpression(Precedence.LOWEST));
+        nextToken();
+        while (curTokenIs(TokenType.COMMA)) {
+            nextToken();
+            argsList.add(parseExpression(Precedence.LOWEST));
+            nextToken();
+        }
+        assert curTokenIs(TokenType.RPAREN) : "Invalid arguments to call expression";
+        return argsList;
     }
 
     private Expression parsePrefixExpression() {
@@ -235,7 +285,7 @@ public class Parser {
     }
 
     private void addDebugStatement(String msg) {
-        debug.add(msg);
+        debug.add(logWithLocation(msg));
     }
 
     public void peekError(String tokType) {
@@ -268,6 +318,7 @@ public class Parser {
         map.put(TokenType.MINUS, Precedence.SUM);
         map.put(TokenType.SLASH, Precedence.PRODUCT);
         map.put(TokenType.ASTERISK, Precedence.PRODUCT);
+        map.put(TokenType.LPAREN, Precedence.CALL);
         return Collections.unmodifiableMap(map);
     }
 }

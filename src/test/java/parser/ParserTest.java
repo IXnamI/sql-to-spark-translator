@@ -8,6 +8,7 @@ import com.sun.org.apache.xpath.internal.operations.Bool;
 import org.junit.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -24,14 +25,15 @@ public class ParserTest {
         Parser parser = new Parser(lexer);
 
         Program program = parser.parseProgram();
+        checkDebugStatements(parser);
         checkParserErrors(parser);
         assert(program != null);
         assertEquals(program.statements.size(), 3);
 
-        List<String> expectedOutput = new ArrayList<>();
-        expectedOutput.add("x");
-        expectedOutput.add("y");
-        expectedOutput.add("foobar");
+        List<LetStatementTest> expectedOutput = new ArrayList<>();
+        expectedOutput.add(new LetStatementTest("let x = 5;", "x", 5));
+        expectedOutput.add(new LetStatementTest("let y = 10;", "y", 10));
+        expectedOutput.add(new LetStatementTest("let foobar = 838383;", "foobar", 838383));
 
         for (int i = 0; i < expectedOutput.size(); ++i) {
             testLetStatement(program.statements.get(i), expectedOutput.get(i));
@@ -52,10 +54,10 @@ public class ParserTest {
         assert(program != null);
         assertEquals(program.statements.size(), 3);
 
-        List<String> expectedOutput = new ArrayList<>();
-        expectedOutput.add("5");
-        expectedOutput.add("10");
-        expectedOutput.add("838383");
+        List<ReturnStatementTest> expectedOutput = new ArrayList<>();
+        expectedOutput.add(new ReturnStatementTest("return 5;", 5));
+        expectedOutput.add(new ReturnStatementTest("return 10;", 10));
+        expectedOutput.add(new ReturnStatementTest("return 838383;", 838383));
 
         for (int i = 0; i < expectedOutput.size(); ++i) {
             testReturnStatement(program.statements.get(i), expectedOutput.get(i));
@@ -176,7 +178,10 @@ public class ParserTest {
                 {"(5 + 5) * 2", "((5 + 5) * 2)"},
                 {"2 / (5 + 5)", "(2 / (5 + 5))"},
                 {"-(5 + 5)", "(-(5 + 5))"},
-                {"!(true == true)", "(!(true == true))"}
+                {"!(true == true)", "(!(true == true))"},
+                {"a + add(b * c) + d", "((a + add((b * c))) + d)"},
+                {"add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))","add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))"},
+                {"add(a + b + c * d / f + g)", "add((((a + b) + ((c * d) / f)) + g))"}
         };
 
         for (String[] test : tests) {
@@ -262,6 +267,87 @@ public class ParserTest {
         testIdentifier("y", alternative.getExpression());
     }
 
+    @Test
+    public void testFunctionLiteralParsing() {
+        String input = "fn(x, y) { x + y; }";
+
+        Lexer lexer = new Lexer(input);
+        Parser parser = new Parser(lexer);
+
+        Program program = parser.parseProgram();
+        checkDebugStatements(parser);
+        checkParserErrors(parser);
+
+        assert(program != null);
+        assertEquals(1, program.getStatements().size());
+
+        assert (program.getStatements().get(0).getClass() == ExpressionStatement.class);
+        ExpressionStatement stmt = (ExpressionStatement) program.getStatements().get(0);
+        assert (stmt.getExpression().getClass() == FunctionLiteral.class);
+        FunctionLiteral function = (FunctionLiteral) stmt.getExpression();
+        assertEquals(2, function.getParams().size());
+        testLiteralExpression(function.getParams().get(0), "x");
+        testLiteralExpression(function.getParams().get(1), "y");
+        assertEquals(1, function.getBody().getStatements().size());
+        assert (function.getBody().getStatements().get(0).getClass() == ExpressionStatement.class);
+        ExpressionStatement bodyStmt = (ExpressionStatement) function.getBody().getStatements().get(0);
+        testInfixExpression(bodyStmt.getExpression(), "x", "+", "y");
+    }
+
+    @Test
+    public void testFunctionParameterParsing() {
+        FunctionParamsTest[] paramsTests = new FunctionParamsTest[3];
+        paramsTests[0] = new FunctionParamsTest("fn() {};", new ArrayList<>());
+        paramsTests[1] = new FunctionParamsTest("fn(x) {};", Arrays.asList("x"));
+        paramsTests[2] = new FunctionParamsTest("fn(x, y, z) {};", Arrays.asList("x", "y", "z"));
+
+        for (FunctionParamsTest currentTest : paramsTests) {
+            Lexer lexer = new Lexer(currentTest.input);
+            Parser parser = new Parser(lexer);
+
+            Program program = parser.parseProgram();
+            checkDebugStatements(parser);
+            checkParserErrors(parser);
+
+            assert (program != null);
+            assertEquals(program.getStatements().size(), 1);
+
+            assert (program.getStatements().get(0).getClass() == ExpressionStatement.class);
+            ExpressionStatement stmt = (ExpressionStatement) program.getStatements().get(0);
+            assert (stmt.getExpression().getClass() == FunctionLiteral.class);
+            FunctionLiteral function = (FunctionLiteral) stmt.getExpression();
+            assertEquals(function.getParams().size(), currentTest.expectedParams.size());
+            for (int i = 0; i < currentTest.expectedParams.size(); ++i) {
+                testLiteralExpression(function.getParams().get(i), currentTest.expectedParams.get(i));
+            }
+        }
+    }
+
+    @Test
+    public void testCallExpressionParsing() {
+        String input = "add(1, 2*3, 4+5)";
+
+        Lexer lexer = new Lexer(input);
+        Parser parser = new Parser(lexer);
+
+        Program program = parser.parseProgram();
+        checkDebugStatements(parser);
+        checkParserErrors(parser);
+
+        assert(program != null);
+        assertEquals(1, program.getStatements().size());
+        assert (program.getStatements().get(0).getClass() == ExpressionStatement.class);
+        ExpressionStatement stmt = (ExpressionStatement) program.getStatements().get(0);
+        assert (stmt.getExpression().getClass() == CallExpression.class);
+        CallExpression callExp = (CallExpression) stmt.getExpression();
+        testIdentifier("add", callExp.getFunction());
+        assertEquals(3, callExp.getArguments().size());
+        List<Expression> args = callExp.getArguments();
+        testLiteralExpression(args.get(0), 1);
+        testInfixExpression(args.get(1), 2, "*", 3);
+        testInfixExpression(args.get(2), 4, "+", 5);
+    }
+
     private void checkParserErrors(Parser p) {
         List<String> errors = p.Errors();
         if (errors.isEmpty()) return;
@@ -281,16 +367,20 @@ public class ParserTest {
         }
     }
 
-    private void testLetStatement(Statement s, String name) {
+    private void testLetStatement(Statement s, LetStatementTest expected) {
         assertEquals("let", s.tokenLiteral(), "TokenLiteral not 'let'");
         assertEquals(LetStatement.class, s.getClass(), "Statement not of type LetStatement");
-        assertEquals(name, ((LetStatement) s).getName().getValue(), "LetStatement.Name.Value is not as expected");
-        assertEquals(name, ((LetStatement) s).getName().tokenLiteral(), "LetStatement.Name.TokenLiteral is not as expected");
+        LetStatement stmt = (LetStatement) s;
+        assertEquals(expected.expectedIdentifier, stmt.getName().getValue(), "LetStatement.Name.Value is not as expected");
+        assertEquals(expected.expectedIdentifier, stmt.getName().tokenLiteral(), "LetStatement.Name.TokenLiteral is not as expected");
+        testLiteralExpression(stmt.getValue(), expected.expectedValue);
     }
 
-    private void testReturnStatement(Statement s, String returnValue) {
+    private void testReturnStatement(Statement s, ReturnStatementTest expected) {
         assertEquals("return", s.tokenLiteral(), "TokenLiteral not 'return'");
         assertEquals(ReturnStatement.class, s.getClass(), "Statement not of type ReturnStatement");
+        ReturnStatement stmt = (ReturnStatement) s;
+        testLiteralExpression(stmt.getReturnValue(), expected.expectedReturnValue);
     }
 
     private void testIntegerLiteral(Integer expectedIntValue, Expression givenExpr) {
@@ -368,5 +458,37 @@ class InfixTest {
     @Override
     public String toString() {
         return leftValue + " " + operator + " " + rightValue;
+    }
+}
+
+class FunctionParamsTest {
+    final String input;
+    final List<String> expectedParams;
+
+    FunctionParamsTest(String input, List<String> expectedParams) {
+        this.input = input;
+        this.expectedParams = expectedParams;
+    }
+}
+
+class LetStatementTest {
+    final String input;
+    final String expectedIdentifier;
+    final Object expectedValue;
+
+    LetStatementTest(String input, String expectedIdentifier, Object expectedValue) {
+        this.input = input;
+        this.expectedIdentifier = expectedIdentifier;
+        this.expectedValue = expectedValue;
+    }
+}
+
+class ReturnStatementTest {
+    final String input;
+    final Object expectedReturnValue;
+
+    ReturnStatementTest(String input, Object expectedReturnValue) {
+       this.expectedReturnValue = expectedReturnValue;
+       this.input = input;
     }
 }
