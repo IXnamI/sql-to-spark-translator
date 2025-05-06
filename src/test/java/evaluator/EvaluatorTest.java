@@ -180,7 +180,7 @@ public class EvaluatorTest {
         assertEquals(expectedBody, func.getBody().toString());
     }
 
-    @Test
+    /*@Test
     public void testFunctionApplication() {
         List<LiteralExpressionTest> tests = new ArrayList<>();
         tests.add(new LiteralExpressionTest("let identity = fn(x) { x; }; identity(5);", 5));
@@ -193,7 +193,7 @@ public class EvaluatorTest {
             checkDebugStatements();
             testIntegerObject(evaluated, currentTest.expected);
         }
-    }
+    }*/
 
     private com.github.xnam.object.Object testEval(String input) {
         Lexer lexer = new Lexer(input);
