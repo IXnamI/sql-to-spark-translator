@@ -9,7 +9,7 @@ import java.util.List;
 
 @Getter
 @Setter
-public class CallExpression implements Expression{
+public class CallExpression implements Expression {
     Token token;
     Expression function;
     List<Expression> arguments;

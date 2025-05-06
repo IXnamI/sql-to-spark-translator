@@ -19,7 +19,7 @@ public class ReturnStatement implements Statement {
     public String toString() {
         StringBuilder output = new StringBuilder();
         output.append(tokenLiteral()).append(" ");
-//        if (returnValue != null) output.append(returnValue.toString());
+        if (returnValue != null) output.append(returnValue.toString());
         output.append(";");
         return output.toString();
     }

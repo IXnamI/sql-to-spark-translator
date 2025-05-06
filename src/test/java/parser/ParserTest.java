@@ -4,7 +4,6 @@ import com.github.xnam.ast.*;
 import com.github.xnam.ast.Boolean;
 import com.github.xnam.lexer.Lexer;
 import com.github.xnam.parser.Parser;
-import com.sun.org.apache.xpath.internal.operations.Bool;
 import org.junit.Test;
 
 import java.util.ArrayList;
