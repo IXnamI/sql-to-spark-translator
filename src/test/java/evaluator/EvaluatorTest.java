@@ -180,7 +180,7 @@ public class EvaluatorTest {
         assertEquals(expectedBody, func.getBody().toString());
     }
 
-    /*@Test
+    @Test
     public void testFunctionApplication() {
         List<LiteralExpressionTest> tests = new ArrayList<>();
         tests.add(new LiteralExpressionTest("let identity = fn(x) { x; }; identity(5);", 5));
@@ -193,7 +193,27 @@ public class EvaluatorTest {
             checkDebugStatements();
             testIntegerObject(evaluated, currentTest.expected);
         }
-    }*/
+    }
+
+    @Test
+    public void testClosures() {
+        String input = "let newAdder = fn(x) {\n" +
+                            "fn(y) { x + y };\n" +
+                        "};\n" +
+                        "let addTwo = newAdder(2);\n" +
+                        "addTwo(2);";
+        testIntegerObject(testEval(input), 4);
+    }
+
+    @Test
+    public void testStringLiteral() {
+        String input = "\"Hello World\"";
+
+        Object evaluated = testEval(input);
+        assert evaluated instanceof com.github.xnam.object.String;
+        com.github.xnam.object.String string = (com.github.xnam.object.String) evaluated;
+        assertEquals("Hello World", string.getValue());
+    }
 
     private com.github.xnam.object.Object testEval(String input) {
         Lexer lexer = new Lexer(input);

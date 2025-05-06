@@ -8,17 +8,25 @@ import java.util.HashMap;
 @Getter
 @Setter
 public class Environment {
-    HashMap<String, Object> store;
+    HashMap<java.lang.String, Object> store;
+    Environment outer;
+
+    public Environment(Environment outer) {
+        this.store = new HashMap<>();
+        this.outer = outer;
+    }
 
     public Environment() {
-        this.store = new HashMap<>();
+        this(null);
     }
 
-    public Object get(String name){
-        return this.store.getOrDefault(name, null);
+    public Object get(java.lang.String name){
+        Object envObj = store.getOrDefault(name, null);
+        if (envObj == null) return outer.get(name);
+        return envObj;
     }
 
-    public Object set(String name, Object value){
+    public Object set(java.lang.String name, Object value){
         this.store.put(name, value);
         return value;
     }

@@ -28,8 +28,8 @@ public class LexerTest {
                 "return false;\n" +
                 "};\n" +
                 "10 == 10;\n" +
-                "10 != 9;";
-
+                "10 != 9;\n" +
+                "let a = \"Hello World\";";
         Lexer lexer = new Lexer(input);
         List<Token> expectedOutput = new ArrayList<>();
         expectedOutput.add(Token.newToken(TokenType.LET, "let"));
@@ -119,12 +119,18 @@ public class LexerTest {
         expectedOutput.add(Token.newToken(TokenType.INT, "9"));
         expectedOutput.add(Token.newToken(TokenType.SEMICOLON, ";"));
 
+        expectedOutput.add(Token.newToken(TokenType.LET, "let"));
+        expectedOutput.add(Token.newToken(TokenType.IDENT, "a"));
+        expectedOutput.add(Token.newToken(TokenType.ASSIGN, "="));
+        expectedOutput.add(Token.newToken(TokenType.STRING, "Hello World"));
+        expectedOutput.add(Token.newToken(TokenType.SEMICOLON, ";"));
+
         expectedOutput.add(Token.newToken(TokenType.EOF, ""));
 
         for (int i = 0; i < expectedOutput.size(); ++i) {
             Token tok = lexer.nextToken();
             Token expectedTok = expectedOutput.get(i);
-            assertEquals("Test " + i + " failed", tok, expectedTok);
+            assertEquals("Test " + i + " failed", expectedTok, tok);
         }
     }
 }

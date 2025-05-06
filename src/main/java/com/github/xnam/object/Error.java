@@ -6,12 +6,12 @@ import lombok.Setter;
 @Getter
 @Setter
 public class Error implements Object {
-    String message;
+    java.lang.String message;
 
-    public Error(String msg) {
+    public Error(java.lang.String msg) {
         this.message = msg;
     }
 
-    public String getType() { return ObjectType.ERROR_OBJ; }
-    public String inspect() { return message; }
+    public java.lang.String getType() { return ObjectType.ERROR_OBJ; }
+    public java.lang.String inspect() { return message; }
 }

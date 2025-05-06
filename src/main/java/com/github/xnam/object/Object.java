@@ -1,6 +1,6 @@
 package com.github.xnam.object;
 
 public interface Object {
-    public String getType();
-    public String inspect();
+    public java.lang.String getType();
+    public java.lang.String inspect();
 }

@@ -6,13 +6,12 @@ import com.github.xnam.object.*;
 import com.github.xnam.object.Error;
 import com.github.xnam.object.Integer;
 import com.github.xnam.object.Object;
+import com.github.xnam.object.String;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 
 public class Evaluator {
-    public static List<String> debug = new ArrayList<>();
+    public static List<java.lang.String> debug = new ArrayList<>();
 
     public static final com.github.xnam.object.Boolean TRUE = new com.github.xnam.object.Boolean(true);
     public static final com.github.xnam.object.Boolean FALSE = new com.github.xnam.object.Boolean(false);
@@ -31,6 +30,13 @@ public class Evaluator {
             if (isError(evaluated)) return evaluated;
             env.set(((LetStatement) node).getName().getValue(), evaluated);
             return evaluated;
+        } else if (node instanceof CallExpression) {
+            CallExpression callExpr = (CallExpression) node;
+            Function func = (Function) eval(callExpr.getFunction(), env);
+            if (isError(func)) return func;
+            List<Object> args = evalExpressions(callExpr.getArguments(), env);
+            if (args.size() == 1 && args.get(0) instanceof Error) return args.get(0);
+            return applyFunction(func, args);
         } else if (node instanceof FunctionLiteral){
             FunctionLiteral func = (FunctionLiteral) node;
             Function funcObj = new Function(env);
@@ -53,35 +59,39 @@ public class Evaluator {
         } else if (node instanceof Identifier) return evalIdentifier((Identifier) node, env);
         else if (node instanceof Boolean) return toBooleanObject(((Boolean) node).getValue());
         else if (node instanceof IntegerLiteral) return new Integer(((IntegerLiteral) node).getValue());
+        else if (node instanceof StringLiteral) return new String(((StringLiteral) node).getValue());
         else return NULL;
     }
 
-    private static Object evalPrefixExpression(String prefixOperator, Object rightExpression) {
+    private static Object evalPrefixExpression(java.lang.String prefixOperator, Object rightExpression) {
         switch (prefixOperator) {
             case "!":
                 return evalBangOperatorExpression(rightExpression);
             case "-":
                 return evalMinusPrefixOperatorExpression(rightExpression);
             default:
-                return new Error(String.format("unknown prefix operator: %s", prefixOperator));
+                return new Error(java.lang.String.format("unknown prefix operator: %s", prefixOperator));
         }
     }
 
-    private static Object evalInfixExpression(String infixOperator, Object leftExpression, Object rightExpression) {
+    private static Object evalInfixExpression(java.lang.String infixOperator, Object leftExpression, Object rightExpression) {
         if (leftExpression.getType().equals(ObjectType.INTEGER_OBJ) && rightExpression.getType().equals(ObjectType.INTEGER_OBJ)) {
             return evalIntegerInfixExpression(infixOperator, (Integer) leftExpression, (Integer) rightExpression);
+        } else if (leftExpression.getType().equals(ObjectType.STRING_OBJ) && rightExpression.getType().equals(ObjectType.STRING_OBJ) && infixOperator.equals("+")){
+            //TODO: Might have to move to its own function
+            return new String(((String) leftExpression).getValue() + ((String) rightExpression).getValue());
         } else if (infixOperator.equals("==")){
             return toBooleanObject(leftExpression.equals(rightExpression));
         } else if (infixOperator.equals("!=")) {
             return toBooleanObject(!leftExpression.equals(rightExpression));
         } else if (!leftExpression.getType().equals(rightExpression.getType())) {
-            return new Error(String.format("type mismatch: %s %s %s", leftExpression.getType(), infixOperator, rightExpression.getType()));
+            return new Error(java.lang.String.format("type mismatch: %s %s %s", leftExpression.getType(), infixOperator, rightExpression.getType()));
         } else {
-            return new Error(String.format("unknown operator: %s %s %s", leftExpression.getType(), infixOperator, rightExpression.getType()));
+            return new Error(java.lang.String.format("unknown operator: %s %s %s", leftExpression.getType(), infixOperator, rightExpression.getType()));
         }
     }
 
-    private static Object evalIntegerInfixExpression(String infixOperator, Integer leftExpression, Integer rightExpression) {
+    private static Object evalIntegerInfixExpression(java.lang.String infixOperator, Integer leftExpression, Integer rightExpression) {
         java.lang.Integer leftVal = leftExpression.getValue();
         java.lang.Integer rightVal = rightExpression.getValue();
         switch (infixOperator) {
@@ -102,7 +112,7 @@ public class Evaluator {
             case "!=":
                 return toBooleanObject(!Objects.equals(leftVal, rightVal));
             default:
-                return new Error(String.format("unknown operator: %s %s %s", leftExpression.getType(), infixOperator, rightExpression.getType()));
+                return new Error(java.lang.String.format("unknown operator: %s %s %s", leftExpression.getType(), infixOperator, rightExpression.getType()));
         }
     }
 
@@ -112,7 +122,7 @@ public class Evaluator {
     }
 
     private static Object evalMinusPrefixOperatorExpression(Object rightExpression) {
-        if (!rightExpression.getType().equals(ObjectType.INTEGER_OBJ)) return new Error(String.format("unknown operator: -%s", rightExpression.getType()));
+        if (!rightExpression.getType().equals(ObjectType.INTEGER_OBJ)) return new Error(java.lang.String.format("unknown operator: -%s", rightExpression.getType()));
         Integer intObject = (Integer) rightExpression;
         return new Integer(-intObject.getValue());
     }
@@ -134,7 +144,7 @@ public class Evaluator {
         for (Statement stmt : block.getStatements()) {
             result = eval(stmt, env);
             if (result != null ) {
-                String type = result.getType();
+                java.lang.String type = result.getType();
                 if (type.equals(ObjectType.RETURN_VALUE_OBJ) || type.equals(ObjectType.ERROR_OBJ)) return result;
             }
         }
@@ -156,6 +166,39 @@ public class Evaluator {
         return evaluatedIdent;
     }
 
+
+    private static List<Object> evalExpressions(List<Expression> args, Environment env) {
+        List<Object> result = new ArrayList<>();
+        for (Expression arg : args) {
+            Object evaluated = eval(arg, env);
+            if (isError(evaluated)) return Collections.singletonList(evaluated);
+            result.add(evaluated);
+        }
+        return result;
+    }
+
+    private static Object applyFunction(Function func, List<Object> args) {
+        Environment extendedEnv = extendFunctionEnv(func, args);
+        Object evaluated = eval(func.getBody(), extendedEnv);
+        return unwrapReturnValue(evaluated);
+    }
+
+    private static Environment extendFunctionEnv(Function func, List<Object> args) {
+        Environment enclosedEnv = new Environment(func.getEnv());
+        List<Identifier> params = func.getParams();
+        for (int i = 0; i < args.size(); ++i) {
+            enclosedEnv.set(params.get(i).getValue(), args.get(i));
+        }
+
+        return enclosedEnv;
+    }
+
+    private static Object unwrapReturnValue(Object obj) {
+        if (obj instanceof ReturnValue) return ((ReturnValue) obj).getValue();
+        return obj;
+    }
+
+
     private static boolean isTruthy(Object obj) {
         if (obj == TRUE) return true;
         else if (obj == FALSE || obj == NULL) return false;
@@ -172,7 +215,7 @@ public class Evaluator {
         return FALSE;
     }
 
-    private static void addDebugStatement(String msg) {
+    private static void addDebugStatement(java.lang.String msg) {
         debug.add(logWithLocation(msg));
     }
 
@@ -180,13 +223,13 @@ public class Evaluator {
         debug.clear();
     }
 
-    public static String logWithLocation(String message) {
+    public static java.lang.String logWithLocation(java.lang.String message) {
         StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
         // Index 2 usually points to the caller of this method
         StackTraceElement element = stackTrace[2];
-        String fileName = element.getFileName();
+        java.lang.String fileName = element.getFileName();
         int lineNumber = element.getLineNumber();
 
-        return String.format("[%s:%d] %s", fileName, lineNumber, message);
+        return java.lang.String.format("[%s:%d] %s", fileName, lineNumber, message);
     }
 }

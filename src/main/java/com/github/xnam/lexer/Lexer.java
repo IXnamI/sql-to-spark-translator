@@ -82,6 +82,9 @@ public class Lexer {
          case '}':
             tok = Token.newToken(TokenType.RBRACE, currentChar.toString());
             break;
+         case '\"':
+            tok = readString();
+            break;
          case 0:
             tok = Token.newToken(TokenType.EOF, "");
             break;
@@ -117,6 +120,17 @@ public class Lexer {
          readChar();
       }
       return Token.newToken(TokenType.INT, number.toString());
+   }
+
+   private Token readString() {
+      StringBuilder string = new StringBuilder();
+      readChar();
+      while (true) {
+         if (currentChar == '\"' || currentChar == 0) break;
+         string.append(currentChar);
+         readChar();
+      }
+      return Token.newToken(TokenType.STRING, string.toString());
    }
 
    private Character peekChar() {

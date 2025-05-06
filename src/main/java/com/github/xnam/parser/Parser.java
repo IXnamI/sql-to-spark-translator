@@ -37,6 +37,7 @@ public class Parser {
         registerPrefix(TokenType.LPAREN, this::parseGroupedExpression);
         registerPrefix(TokenType.IF, this::parseIfExpression);
         registerPrefix(TokenType.FUNCTION, this::parseFunctionLiteral);
+        registerPrefix(TokenType.STRING, this::parseStringLiteral);
         registerInfix(TokenType.PLUS, this::parseInfixExpression);
         registerInfix(TokenType.MINUS, this::parseInfixExpression);
         registerInfix(TokenType.SLASH, this::parseInfixExpression);
@@ -188,6 +189,10 @@ public class Parser {
             nextToken();
         }
         return identList;
+    }
+
+    private StringLiteral parseStringLiteral() {
+        return new StringLiteral(curToken, curToken.getLiteral());
     }
 
     private BlockStatement parseBlockStatement() {

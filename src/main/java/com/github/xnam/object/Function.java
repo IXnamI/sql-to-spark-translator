@@ -19,16 +19,16 @@ public class Function implements Object {
         this.env = env;
     }
 
-    public String getType() { return ObjectType.FUNCTION_OBJ; }
-    public String inspect() {
+    public java.lang.String getType() { return ObjectType.FUNCTION_OBJ; }
+    public java.lang.String inspect() {
         StringBuilder output = new StringBuilder();
-        List<String> paramsAsString = new ArrayList<>();
+        List<java.lang.String> paramsAsString = new ArrayList<>();
         for (Identifier ident : params) {
             paramsAsString.add(ident.toString());
         }
         output.append("fn");
         output.append("(");
-        output.append(String.join(", ", paramsAsString));
+        output.append(java.lang.String.join(", ", paramsAsString));
         output.append(") {\n");
         output.append(body.toString());
         output.append("\n}");

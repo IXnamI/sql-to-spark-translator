@@ -12,8 +12,8 @@ public class Integer implements Object{
         this.value = value;
     }
 
-    public String getType() { return ObjectType.INTEGER_OBJ; }
-    public String inspect() {
-        return String.format("%d", value);
+    public java.lang.String getType() { return ObjectType.INTEGER_OBJ; }
+    public java.lang.String inspect() {
+        return java.lang.String.format("%d", value);
     }
 }

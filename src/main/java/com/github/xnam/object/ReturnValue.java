@@ -12,6 +12,6 @@ public class ReturnValue implements Object {
         this.value = returnVal;
     }
 
-    public String getType() { return ObjectType.RETURN_VALUE_OBJ; }
-    public String inspect() { return value.inspect(); }
+    public java.lang.String getType() { return ObjectType.RETURN_VALUE_OBJ; }
+    public java.lang.String inspect() { return value.inspect(); }
 }

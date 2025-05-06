@@ -12,8 +12,8 @@ public class Boolean implements Object {
         this.value = value;
     }
 
-    public String getType() { return ObjectType.BOOLEAN_OBJ; }
-    public String inspect() {
-        return String.format("%b", value);
+    public java.lang.String getType() { return ObjectType.BOOLEAN_OBJ; }
+    public java.lang.String inspect() {
+        return java.lang.String.format("%b", value);
     }
 }

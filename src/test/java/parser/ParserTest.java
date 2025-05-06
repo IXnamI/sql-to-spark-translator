@@ -347,6 +347,26 @@ public class ParserTest {
         testInfixExpression(args.get(2), 4, "+", 5);
     }
 
+    @Test
+    public void testStringLiteralParsing() {
+        String input = "\"Hello World\";";
+
+        Lexer lexer = new Lexer(input);
+        Parser parser = new Parser(lexer);
+
+        Program program = parser.parseProgram();
+        checkDebugStatements(parser);
+        checkParserErrors(parser);
+
+        assert(program != null);
+        assertEquals(1, program.getStatements().size());
+        assert (program.getStatements().get(0).getClass() == ExpressionStatement.class);
+        ExpressionStatement stmt = (ExpressionStatement) program.getStatements().get(0);
+        assert (stmt.getExpression() instanceof StringLiteral);
+        StringLiteral string = (StringLiteral) stmt.getExpression();
+        assertEquals(string.getValue(), "Hello World");
+    }
+
     private void checkParserErrors(Parser p) {
         List<String> errors = p.Errors();
         if (errors.isEmpty()) return;

@@ -16,7 +16,8 @@ public final class TokenType {
 
     // Identifiers + Operators
     public static final String IDENT = "IDENT"; 
-    public static final String INT = "INT";    
+    public static final String INT = "INT";
+    public static final String STRING = "STRING";
     public static final String ASSIGN = "=";
     public static final String PLUS = "+";
     public static final String MINUS = "-";
