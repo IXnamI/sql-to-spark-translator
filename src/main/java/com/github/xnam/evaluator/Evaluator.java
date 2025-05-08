@@ -12,7 +12,7 @@ import java.util.*;
 
 public class Evaluator {
     public static List<java.lang.String> debug = new ArrayList<>();
-
+    private static BuiltInMap builtIn = new BuiltInMap();
     public static final com.github.xnam.object.Boolean TRUE = new com.github.xnam.object.Boolean(true);
     public static final com.github.xnam.object.Boolean FALSE = new com.github.xnam.object.Boolean(false);
     public static final Null NULL = new Null();
@@ -32,7 +32,7 @@ public class Evaluator {
             return evaluated;
         } else if (node instanceof CallExpression) {
             CallExpression callExpr = (CallExpression) node;
-            Function func = (Function) eval(callExpr.getFunction(), env);
+            Object func = eval(callExpr.getFunction(), env);
             if (isError(func)) return func;
             List<Object> args = evalExpressions(callExpr.getArguments(), env);
             if (args.size() == 1 && args.get(0) instanceof Error) return args.get(0);
@@ -162,6 +162,8 @@ public class Evaluator {
 
     private static Object evalIdentifier(Identifier ident, Environment env) {
         Object evaluatedIdent = env.get(ident.getValue());
+        Object builtInObj = builtIn.store.getOrDefault(ident.getValue(), null);
+        if (builtInObj != null) return builtInObj;
         if (evaluatedIdent == null) return new Error("identifier not found: " + ident.getValue());
         return evaluatedIdent;
     }
@@ -177,10 +179,18 @@ public class Evaluator {
         return result;
     }
 
-    private static Object applyFunction(Function func, List<Object> args) {
-        Environment extendedEnv = extendFunctionEnv(func, args);
-        Object evaluated = eval(func.getBody(), extendedEnv);
-        return unwrapReturnValue(evaluated);
+    private static Object applyFunction(Object func, List<Object> args) {
+        if (func instanceof Function) {
+            Function castedFunc = (Function) func;
+            Environment extendedEnv = extendFunctionEnv(castedFunc, args);
+            Object evaluated = eval(castedFunc.getBody(), extendedEnv);
+            return unwrapReturnValue(evaluated);
+        } else if (func instanceof BuiltIn){
+            BuiltIn builtInObj = (BuiltIn) func;
+            return builtInObj.getFunc().apply(args.toArray(new Object[0]));
+        } else {
+            return new Error(java.lang.String.format("not a function: %s", func.getType()));
+        }
     }
 
     private static Environment extendFunctionEnv(Function func, List<Object> args) {

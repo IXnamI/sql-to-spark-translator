@@ -22,7 +22,10 @@ public class Environment {
 
     public Object get(java.lang.String name){
         Object envObj = store.getOrDefault(name, null);
-        if (envObj == null) return outer.get(name);
+        if (envObj == null) {
+            if (outer == null) return null;
+            return outer.get(name);
+        }
         return envObj;
     }
 

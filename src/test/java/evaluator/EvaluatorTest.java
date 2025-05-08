@@ -215,6 +215,26 @@ public class EvaluatorTest {
         assertEquals("Hello World", string.getValue());
     }
 
+    @Test
+    public void testBuiltInFunctions() {
+        List<LiteralExpressionTest> tests = new ArrayList<>();
+        tests.add(new LiteralExpressionTest("len(\"\")", 0));
+        tests.add(new LiteralExpressionTest("len(\"four\")", 4));
+        tests.add(new LiteralExpressionTest("len(\"hello world\")", 11));
+        tests.add(new LiteralExpressionTest("len(1)", "Type INTEGER is not supported by len()"));
+        tests.add(new LiteralExpressionTest("len(\"one\", \"two\")", "Inappropriate amount of arguments, expected = 1, got = 2"));
+        for (LiteralExpressionTest currentTest : tests) {
+            com.github.xnam.object.Object evaluated = testEval(currentTest.input);
+            checkDebugStatements();
+            if (currentTest.expected instanceof Integer) testIntegerObject(evaluated, currentTest.expected);
+            else if (currentTest.expected instanceof String) {
+                assert evaluated instanceof com.github.xnam.object.Error;
+                com.github.xnam.object.Error errorObj = (com.github.xnam.object.Error) evaluated;
+                assertEquals(currentTest.expected, errorObj.getMessage());
+            }
+        }
+    }
+
     private com.github.xnam.object.Object testEval(String input) {
         Lexer lexer = new Lexer(input);
         Parser parser = new Parser(lexer);
