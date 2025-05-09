@@ -1,11 +1,19 @@
-# Monkey Interpreter (Java)
+# SQL to Spark Translator
 
-
-A Java implementation based on Thorsten Ball’s book [*Writing an Interpreter in Go*](https://interpreterbook.com/). 
+A tool designed to converts standard SQL queries into equivalent Apache Spark code
 
 ---
 
-### Prerequisites
+## Features
+
+- Support for SELECT, WHERE, JOIN, GROUP BY, ORDER BY
+- Nested queries and subqueries
+- Basic Window functions
+- Translation into Spark Scala
+
+---
+
+## Prerequisites
 
 - Java 8 or higher
 - Maven as the build tool
