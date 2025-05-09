@@ -25,7 +25,7 @@ public class Token {
         if (this == anotherObject) return true;
         if (anotherObject == null || getClass() != anotherObject.getClass()) return false;
         if (!type.equals(((Token) anotherObject).getType())) return false;
-        return Objects.equals(literal, ((Token) anotherObject).getLiteral());
+        return Objects.equals(literal.toLowerCase(), ((Token) anotherObject).getLiteral().toLowerCase());
     }
 
     @Override

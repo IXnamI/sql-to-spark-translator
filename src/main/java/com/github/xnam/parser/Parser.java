@@ -30,13 +30,8 @@ public class Parser {
         prefixParseFns = new HashMap<>();
         registerPrefix(TokenType.IDENT, this::parseIdentifier);
         registerPrefix(TokenType.INT, this::parseIntegerLiteral);
-        registerPrefix(TokenType.BANG, this::parsePrefixExpression);
         registerPrefix(TokenType.MINUS, this::parsePrefixExpression);
-        registerPrefix(TokenType.TRUE, this::parseBoolean);
-        registerPrefix(TokenType.FALSE, this::parseBoolean);
         registerPrefix(TokenType.LPAREN, this::parseGroupedExpression);
-        registerPrefix(TokenType.IF, this::parseIfExpression);
-        registerPrefix(TokenType.FUNCTION, this::parseFunctionLiteral);
         registerPrefix(TokenType.STRING, this::parseStringLiteral);
         registerPrefix(TokenType.LBRACKET, this::parseArrayLiteral);
         registerInfix(TokenType.PLUS, this::parseInfixExpression);
@@ -78,10 +73,6 @@ public class Parser {
 
     public Statement parseStatement() {
         switch (curToken.getType()) {
-            case TokenType.LET:
-                return parseLetStatement();
-            case TokenType.RETURN:
-                return parseReturnStatement();
             default:
                 return parseExpressionStatement();
         }
@@ -158,11 +149,9 @@ public class Parser {
         IfExpression ifExpr = new IfExpression(curToken);
         if (!expectPeek(TokenType.LPAREN)) return null;
         ifExpr.setCondition(parseExpression(Precedence.LOWEST));
-        if (!expectPeek(TokenType.LBRACE)) return null;
         ifExpr.setConsequence(parseBlockStatement());
         if (peekTokenIs(TokenType.ELSE)) {
             nextToken();
-            if (!expectPeek(TokenType.LBRACE)) return null;
             ifExpr.setAlternative(parseBlockStatement());
         }
         return ifExpr;
@@ -172,7 +161,6 @@ public class Parser {
         FunctionLiteral function = new FunctionLiteral(curToken);
         if (!expectPeek(TokenType.LPAREN)) return null;
         function.getParams().addAll(parseFunctionParameters());
-        if (!expectPeek(TokenType.LBRACE)) return null;
         function.setBody(parseBlockStatement());
         return function;
     }
@@ -200,7 +188,7 @@ public class Parser {
     private BlockStatement parseBlockStatement() {
         BlockStatement block = new BlockStatement(curToken);
         nextToken();
-        while (!curTokenIs(TokenType.RBRACE) && !curTokenIs(TokenType.EOF)) {
+        while (!curTokenIs(TokenType.RBRACKET) && !curTokenIs(TokenType.EOF)) {
             Statement stmt = parseStatement();
             assert stmt != null : "Failed to parse statement";
             block.getStatements().add(stmt);

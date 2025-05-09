@@ -44,7 +44,7 @@ public class Lexer {
                readChar();
                break;
             }
-            tok = Token.newToken(TokenType.BANG, currentChar.toString());
+            tok = Token.newToken(TokenType.ILLEGAL, currentChar.toString());
             break;
          case '-':
             tok = Token.newToken(TokenType.MINUS, currentChar.toString());
@@ -56,9 +56,19 @@ public class Lexer {
             tok = Token.newToken(TokenType.SLASH, currentChar.toString());
             break;
          case '>':
+            if (peekChar() == '=') {
+               tok = Token.newToken(TokenType.GTE, currentChar.toString() + peekChar());
+               readChar();
+               break;
+            }
             tok = Token.newToken(TokenType.GT, currentChar.toString());
             break;
          case '<':
+            if (peekChar() == '=') {
+               tok = Token.newToken(TokenType.LTE, currentChar.toString() + peekChar());
+               readChar();
+               break;
+            }
             tok = Token.newToken(TokenType.LT, currentChar.toString());
             break;
          case ';':
@@ -76,11 +86,8 @@ public class Lexer {
          case '+':
             tok = Token.newToken(TokenType.PLUS, currentChar.toString());
             break;
-         case '{':
-            tok = Token.newToken(TokenType.LBRACE, currentChar.toString());
-            break;
-         case '}':
-            tok = Token.newToken(TokenType.RBRACE, currentChar.toString());
+         case '%':
+            tok = Token.newToken(TokenType.MODULO, currentChar.toString());
             break;
          case '[':
             tok = Token.newToken(TokenType.LBRACKET, currentChar.toString());
@@ -88,7 +95,10 @@ public class Lexer {
          case ']':
             tok = Token.newToken(TokenType.RBRACKET, currentChar.toString());
             break;
-         case '\"':
+         case '.':
+            tok = Token.newToken(TokenType.DOT, currentChar.toString());
+            break;
+         case '\'':
             tok = readString();
             break;
          case 0:
@@ -125,14 +135,25 @@ public class Lexer {
          number.append(currentChar);
          readChar();
       }
+      if (currentChar == '.') return readDecimal(number.toString());
       return Token.newToken(TokenType.INT, number.toString());
+   }
+
+   private Token readDecimal(String wholeNumber) {
+      StringBuilder fractional = new StringBuilder();
+      readChar();
+      while (NumberUtils.isDigit(currentChar)) {
+         fractional.append(currentChar);
+         readChar();
+      }
+      return Token.newToken(TokenType.FLOAT, wholeNumber + "." + fractional);
    }
 
    private Token readString() {
       StringBuilder string = new StringBuilder();
       readChar();
       while (true) {
-         if (currentChar == '\"' || currentChar == 0) break;
+         if (currentChar == '\'' || currentChar == 0) break;
          string.append(currentChar);
          readChar();
       }

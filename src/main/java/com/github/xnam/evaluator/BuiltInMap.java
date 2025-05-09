@@ -7,9 +7,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+//TODO: Convert into Window functions, including: rank, lag, last_value, count, first_value, min, dense_rank, ntile, sum, row_number, lead, avg, max, percent_rank, cume_dist, nth_value
 public class BuiltInMap {
     public Map<String, BuiltIn> store = new HashMap();
-
     public BuiltInMap() {
         initMap();
     }
