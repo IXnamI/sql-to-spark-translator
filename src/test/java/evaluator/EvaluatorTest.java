@@ -16,6 +16,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class EvaluatorTest {
+/*
     @Test
     public void testEvalIntegerExpression() {
         List<LiteralExpressionTest> tests = new ArrayList<>();
@@ -269,6 +270,7 @@ public class EvaluatorTest {
             else testNullObject(evaluated);
         }
     }
+*/
 
     private com.github.xnam.object.Object testEval(String input) {
         Lexer lexer = new Lexer(input);

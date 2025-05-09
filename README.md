@@ -25,7 +25,7 @@ A tool designed to converts standard SQL queries into equivalent Apache Spark co
 ### Using Maven
 
 ```mvn clean package``` \
-```java -cp target/interpreter-1.0-SNAPSHOT.jar com.github.xnam.Main```
+```java -cp target/sql-to-spark-1.0-SNAPSHOT.jar com.github.xnam.Main```
 
 ### Running Tests
 
