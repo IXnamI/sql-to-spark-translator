@@ -37,6 +37,18 @@ public class Evaluator {
             List<Object> args = evalExpressions(callExpr.getArguments(), env);
             if (args.size() == 1 && args.get(0) instanceof Error) return args.get(0);
             return applyFunction(func, args);
+        } else if (node instanceof ArrayLiteral) {
+            ArrayLiteral array = (ArrayLiteral) node;
+            List<Object> elements = evalExpressions(array.getElements(), env);
+            if (elements.size() == 1 && elements.get(0) instanceof Error) return elements.get(0);
+            return new Array(elements);
+        } else if (node instanceof IndexExpression) {
+            IndexExpression idxExpr = (IndexExpression) node;
+            Object left = eval(idxExpr.getLeft(), env);
+            if (isError(left)) return left;
+            Object idx = eval(idxExpr.getIndex(), env);
+            if (isError(idx)) return left;
+            return evalIndexExpression(left, idx);
         } else if (node instanceof FunctionLiteral){
             FunctionLiteral func = (FunctionLiteral) node;
             Function funcObj = new Function(env);
@@ -177,6 +189,20 @@ public class Evaluator {
             result.add(evaluated);
         }
         return result;
+    }
+
+    private static Object evalIndexExpression(Object left, Object index) {
+        if (left.getType().equals(ObjectType.ARRAY_OBJ) && index.getType().equals(ObjectType.INTEGER_OBJ)) {
+            return evalArrayIndexExpression(left, index);
+        } else return new Error(java.lang.String.format("index operator not supported: %s", left.getType()));
+    }
+
+    private static Object evalArrayIndexExpression(Object left, Object index) {
+        Array arr = (Array) left;
+        Integer idx = (Integer) index;
+        java.lang.Integer max = arr.getElements().size() - 1;
+        if (idx.getValue() > max || idx.getValue() < 0) return NULL;
+        return arr.getElements().get(idx.getValue());
     }
 
     private static Object applyFunction(Object func, List<Object> args) {

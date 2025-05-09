@@ -3,6 +3,7 @@ package evaluator;
 import com.github.xnam.ast.Program;
 import com.github.xnam.evaluator.Evaluator;
 import com.github.xnam.lexer.Lexer;
+import com.github.xnam.object.Array;
 import com.github.xnam.object.Environment;
 import com.github.xnam.object.Function;
 import com.github.xnam.object.ObjectType;
@@ -232,6 +233,40 @@ public class EvaluatorTest {
                 com.github.xnam.object.Error errorObj = (com.github.xnam.object.Error) evaluated;
                 assertEquals(currentTest.expected, errorObj.getMessage());
             }
+        }
+    }
+
+    @Test
+    public void testArrayLiterals() {
+        String input = "[1, 2 * 2, 3 + 3]";
+
+        Object evaluated = testEval(input);
+        assert evaluated instanceof Array;
+        Array array = (Array) evaluated;
+        assertEquals(3, array.getElements().size());
+        testIntegerObject(array.getElements().get(0), 1);
+        testIntegerObject(array.getElements().get(1), 4);
+        testIntegerObject(array.getElements().get(2), 6);
+    }
+
+    @Test
+    public void testArrayIndexExpressions() {
+        List<LiteralExpressionTest> tests = new ArrayList<>();
+        tests.add(new LiteralExpressionTest("[1, 2, 3][0]", 1));
+        tests.add(new LiteralExpressionTest("[1, 2, 3][1]", 2));
+        tests.add(new LiteralExpressionTest("[1, 2, 3][2]", 3));
+        tests.add(new LiteralExpressionTest("let i = 0; [1][i];", 1));
+        tests.add(new LiteralExpressionTest("[1, 2, 3][1 + 1];", 3));
+        tests.add(new LiteralExpressionTest("let myArray = [1, 2, 3]; myArray[2];", 3));
+        tests.add(new LiteralExpressionTest("let myArray = [1, 2, 3]; myArray[0] + myArray[1] + myArray[2];", 6));
+        tests.add(new LiteralExpressionTest("let myArray = [1, 2, 3]; let i = myArray[0]; myArray[i];", 2));
+        tests.add(new LiteralExpressionTest("[1, 2, 3][3]", null));
+        tests.add(new LiteralExpressionTest("[1, 2, 3][-1]", null));
+        for (LiteralExpressionTest currentTest : tests) {
+            com.github.xnam.object.Object evaluated = testEval(currentTest.input);
+            checkDebugStatements();
+            if (currentTest.expected instanceof Integer) testIntegerObject(evaluated, currentTest.expected);
+            else testNullObject(evaluated);
         }
     }
 

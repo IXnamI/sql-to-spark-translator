@@ -38,6 +38,7 @@ public class Parser {
         registerPrefix(TokenType.IF, this::parseIfExpression);
         registerPrefix(TokenType.FUNCTION, this::parseFunctionLiteral);
         registerPrefix(TokenType.STRING, this::parseStringLiteral);
+        registerPrefix(TokenType.LBRACKET, this::parseArrayLiteral);
         registerInfix(TokenType.PLUS, this::parseInfixExpression);
         registerInfix(TokenType.MINUS, this::parseInfixExpression);
         registerInfix(TokenType.SLASH, this::parseInfixExpression);
@@ -47,6 +48,7 @@ public class Parser {
         registerInfix(TokenType.LT, this::parseInfixExpression);
         registerInfix(TokenType.GT, this::parseInfixExpression);
         registerInfix(TokenType.LPAREN, this::parseCallExpression);
+        registerInfix(TokenType.LBRACKET, this::parseIndexExpression);
         nextToken();
         nextToken();
     }
@@ -256,6 +258,29 @@ public class Parser {
         return expr;
     }
 
+    private Expression parseArrayLiteral() {
+        ArrayLiteral array = new ArrayLiteral(curToken);
+        if (peekTokenIs(TokenType.RBRACKET)) {
+            nextToken();
+            return array;
+        }
+        while (!curTokenIs(TokenType.RBRACKET) && !curTokenIs(TokenType.EOF)) {
+            nextToken();
+            Expression elem = parseExpression(Precedence.LOWEST);
+            array.getElements().add(elem);
+            nextToken();
+        }
+        return array;
+    }
+
+    private Expression parseIndexExpression(Expression left) {
+        IndexExpression idxExpr = new IndexExpression(curToken, left);
+        nextToken();
+        idxExpr.setIndex(parseExpression(Precedence.LOWEST));
+        if (!expectPeek(TokenType.RBRACKET)) return null;
+        return idxExpr;
+    }
+
     private boolean expectPeek(String tokType) {
         if (peekTokenIs(tokType)) {
             nextToken();
@@ -324,6 +349,7 @@ public class Parser {
         map.put(TokenType.SLASH, Precedence.PRODUCT);
         map.put(TokenType.ASTERISK, Precedence.PRODUCT);
         map.put(TokenType.LPAREN, Precedence.CALL);
+        map.put(TokenType.LBRACKET, Precedence.INDEX);
         return Collections.unmodifiableMap(map);
     }
 }

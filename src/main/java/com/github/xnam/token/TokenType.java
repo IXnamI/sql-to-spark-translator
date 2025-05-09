@@ -36,6 +36,8 @@ public final class TokenType {
     public static final String RPAREN = ")";
     public static final String LBRACE = "{";
     public static final String RBRACE = "}";
+    public static final String LBRACKET = "[";
+    public static final String RBRACKET = "]";
 
     // Keywords
     public static final String FUNCTION = "FUNCTION";

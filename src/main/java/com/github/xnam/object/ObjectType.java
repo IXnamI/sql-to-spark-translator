@@ -9,4 +9,5 @@ public class ObjectType {
     public static final java.lang.String FUNCTION_OBJ = "FUNCTION";
     public static final java.lang.String STRING_OBJ = "STRING";
     public static final java.lang.String BUILTIN_OBJ = "BUILTIN";
+    public static final java.lang.String ARRAY_OBJ = "ARRAY";
 }

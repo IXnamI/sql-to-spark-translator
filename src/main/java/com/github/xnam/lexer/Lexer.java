@@ -82,6 +82,12 @@ public class Lexer {
          case '}':
             tok = Token.newToken(TokenType.RBRACE, currentChar.toString());
             break;
+         case '[':
+            tok = Token.newToken(TokenType.LBRACKET, currentChar.toString());
+            break;
+         case ']':
+            tok = Token.newToken(TokenType.RBRACKET, currentChar.toString());
+            break;
          case '\"':
             tok = readString();
             break;

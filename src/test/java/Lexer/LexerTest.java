@@ -29,7 +29,8 @@ public class LexerTest {
                 "};\n" +
                 "10 == 10;\n" +
                 "10 != 9;\n" +
-                "let a = \"Hello World\";";
+                "let a = \"Hello World\";\n" +
+                "[1, 2];";
         Lexer lexer = new Lexer(input);
         List<Token> expectedOutput = new ArrayList<>();
         expectedOutput.add(Token.newToken(TokenType.LET, "let"));
@@ -123,6 +124,13 @@ public class LexerTest {
         expectedOutput.add(Token.newToken(TokenType.IDENT, "a"));
         expectedOutput.add(Token.newToken(TokenType.ASSIGN, "="));
         expectedOutput.add(Token.newToken(TokenType.STRING, "Hello World"));
+        expectedOutput.add(Token.newToken(TokenType.SEMICOLON, ";"));
+
+        expectedOutput.add(Token.newToken(TokenType.LBRACKET, "["));
+        expectedOutput.add(Token.newToken(TokenType.INT, "1"));
+        expectedOutput.add(Token.newToken(TokenType.COMMA, ","));
+        expectedOutput.add(Token.newToken(TokenType.INT, "2"));
+        expectedOutput.add(Token.newToken(TokenType.RBRACKET, "]"));
         expectedOutput.add(Token.newToken(TokenType.SEMICOLON, ";"));
 
         expectedOutput.add(Token.newToken(TokenType.EOF, ""));

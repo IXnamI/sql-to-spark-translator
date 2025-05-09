@@ -367,6 +367,49 @@ public class ParserTest {
         assertEquals(string.getValue(), "Hello World");
     }
 
+    @Test
+    public void testParsingArrayLiteral() {
+        String input = "[1, 2 * 2, 3 + 3]";
+
+        Lexer lexer = new Lexer(input);
+        Parser parser = new Parser(lexer);
+
+        Program program = parser.parseProgram();
+        checkDebugStatements(parser);
+        checkParserErrors(parser);
+
+        assert(program != null);
+        assertEquals(1, program.getStatements().size());
+        assert (program.getStatements().get(0).getClass() == ExpressionStatement.class);
+        ExpressionStatement stmt = (ExpressionStatement) program.getStatements().get(0);
+        assert (stmt.getExpression() instanceof ArrayLiteral);
+        ArrayLiteral array = (ArrayLiteral) stmt.getExpression();
+        testIntegerLiteral(1, array.getElements().get(0));
+        testInfixExpression(array.getElements().get(1), 2, "*", 2);
+        testInfixExpression(array.getElements().get(2), 3, "+", 3);
+    }
+
+    @Test
+    public void testParsingIndexExpression() {
+        String input = "myArray[1+1];";
+        Lexer lexer = new Lexer(input);
+        Parser parser = new Parser(lexer);
+
+        Program program = parser.parseProgram();
+        checkDebugStatements(parser);
+        checkParserErrors(parser);
+
+        assert(program != null);
+        assertEquals(1, program.getStatements().size());
+        assert (program.getStatements().get(0).getClass() == ExpressionStatement.class);
+        ExpressionStatement stmt = (ExpressionStatement) program.getStatements().get(0);
+        assert (stmt.getExpression() instanceof IndexExpression);
+        IndexExpression idxExpr = (IndexExpression) stmt.getExpression();
+        testLiteralExpression(idxExpr.getLeft(), "myArray");
+        testInfixExpression(idxExpr.getIndex(), 1, "+", 1);
+    }
+
+
     private void checkParserErrors(Parser p) {
         List<String> errors = p.Errors();
         if (errors.isEmpty()) return;
