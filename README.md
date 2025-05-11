@@ -1,4 +1,4 @@
-# SQL to Spark Translator
+# SQL to Spark Translator (WIP)
 
 A tool designed to converts standard SQL queries into equivalent Apache Spark code
 
