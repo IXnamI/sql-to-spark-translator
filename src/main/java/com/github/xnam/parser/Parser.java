@@ -7,6 +7,7 @@ import com.github.xnam.lexer.Lexer;
 import com.github.xnam.token.TokenType;
 import com.github.xnam.utils.LoggingUtils;
 import com.sun.javafx.util.Logging;
+import com.sun.org.apache.xpath.internal.operations.Or;
 
 import java.util.*;
 import java.util.function.Function;
@@ -21,6 +22,7 @@ public class Parser {
     Map<String, Function<Expression, Expression>> infixParseFns;
     Map<String, Supplier<Expression>> prefixParseFns;
     public static final Map<String, Integer> precedences = createPrecedenceMap();
+    public static final List<String> clauseStart = Arrays.asList(TokenType.WHERE, TokenType.GROUP, TokenType.HAVING, TokenType.ORDER, TokenType.LIMIT, TokenType.OFFSET);
 
     public Parser(Lexer lexer) {
         this.lexer = lexer;
@@ -28,12 +30,15 @@ public class Parser {
         this.debug = new ArrayList<>();
         infixParseFns = new HashMap<>();
         prefixParseFns = new HashMap<>();
-        registerPrefix(TokenType.IDENT, this::parseIdentifier);
+        registerPrefix(TokenType.ASTERISK, this::parseColumnName);
+        registerPrefix(TokenType.IDENT, this::parseColumnName);
         registerPrefix(TokenType.INT, this::parseIntegerLiteral);
         registerPrefix(TokenType.MINUS, this::parsePrefixExpression);
+        registerPrefix(TokenType.NOT, this::parsePrefixExpression);
         registerPrefix(TokenType.LPAREN, this::parseGroupedExpression);
         registerPrefix(TokenType.STRING, this::parseStringLiteral);
-        registerPrefix(TokenType.LBRACKET, this::parseArrayLiteral);
+        registerPrefix(TokenType.TRUE, this::parseBoolean);
+        registerPrefix(TokenType.FALSE, this::parseBoolean);
         registerInfix(TokenType.PLUS, this::parseInfixExpression);
         registerInfix(TokenType.MINUS, this::parseInfixExpression);
         registerInfix(TokenType.SLASH, this::parseInfixExpression);
@@ -42,8 +47,8 @@ public class Parser {
         registerInfix(TokenType.NOT_EQ, this::parseInfixExpression);
         registerInfix(TokenType.LT, this::parseInfixExpression);
         registerInfix(TokenType.GT, this::parseInfixExpression);
-        registerInfix(TokenType.LPAREN, this::parseCallExpression);
-        registerInfix(TokenType.LBRACKET, this::parseIndexExpression);
+        registerInfix(TokenType.LPAREN, this::parseFunctionCall);
+        registerInfix(TokenType.DOT, this::parseColumnWithTableReference);
         nextToken();
         nextToken();
     }
@@ -73,37 +78,29 @@ public class Parser {
 
     public Statement parseStatement() {
         switch (curToken.getType()) {
+            case TokenType.SELECT:
+                return parseSelectStatement();
             default:
-                return parseExpressionStatement();
+                //Not really a thing in SQL, only for unit testing parsing expression and clauses
+                return parseTestStatement();
         }
     }
 
-    private ReturnStatement parseReturnStatement() {
-        ReturnStatement stmt = new ReturnStatement(curToken);
-        nextToken();
-        stmt.setReturnValue(parseExpression(Precedence.LOWEST));
-        if (!expectPeek(TokenType.SEMICOLON)) return null;
-        return stmt;
+    private SelectStatement parseSelectStatement() {
+        SelectStatement selectStatement = new SelectStatement(curToken);
+        while (isClauseStart(curToken)) {
+            Clause clause = parseClause();
+        }
+        return selectStatement;
     }
 
-    private LetStatement parseLetStatement() {
-        LetStatement stmt = new LetStatement(curToken);
-        if (!expectPeek(TokenType.IDENT)) return null;
-        stmt.setName(new Identifier(curToken, curToken.getLiteral()));
-        if (!expectPeek(TokenType.ASSIGN)) return null;
-        nextToken();
-        stmt.setValue(parseExpression(Precedence.LOWEST));
-        if (!expectPeek(TokenType.SEMICOLON)) return null;
-        return stmt;
+    private Statement parseTestStatement() {
+        ExpressionStatement expressionStatement = new ExpressionStatement(curToken);
+        if (isClauseStart(curToken)) expressionStatement.setParsedNode(parseClause());
+        else expressionStatement.setParsedNode(parseExpression(Precedence.LOWEST));
+        return expressionStatement;
     }
 
-    private ExpressionStatement parseExpressionStatement() {
-        ExpressionStatement stmt = new ExpressionStatement(curToken);
-        stmt.setExpression(parseExpression(Precedence.LOWEST));
-
-        if (peekTokenIs(TokenType.SEMICOLON)) nextToken();
-        return stmt;
-    }
     private Expression parseExpression(int precedence) {
         Supplier<Expression> prefixParseFn = prefixParseFns.getOrDefault(curToken.getType(), null);
         if (prefixParseFn == null) {
@@ -111,7 +108,7 @@ public class Parser {
             return null;
         }
         Expression leftExp = prefixParseFn.get();
-        while(!peekTokenIs(TokenType.SEMICOLON) && (precedence < peekPrecedence())) {
+        while((!curTokenIs(TokenType.EOF)) && (precedence < peekPrecedence())) {
             Function<Expression, Expression> infixParseFn = infixParseFns.getOrDefault(peekToken.getType(), null);
             if (infixParseFn == null) {
                 return leftExp;
@@ -121,6 +118,25 @@ public class Parser {
             leftExp = infixParseFn.apply(leftExp);
         }
         return leftExp;
+    }
+
+    private Clause parseClause() {
+        switch (curToken.getType()) {
+            case TokenType.WHERE:
+                return parseWhereClause();
+            case TokenType.GROUP:
+                return parseGroupByClause();
+            case TokenType.HAVING:
+                return parseHavingClause();
+            case TokenType.ORDER:
+                return parseOrderByClause();
+            case TokenType.LIMIT:
+                return parseLimitClause();
+            case TokenType.OFFSET:
+                return parseOffsetClause();
+            default:
+                return null;
+        }
     }
 
     private Expression parseIdentifier() {
@@ -143,26 +159,6 @@ public class Parser {
 
     private Expression parseBoolean() {
         return new Boolean(curToken);
-    }
-
-    private Expression parseIfExpression() {
-        IfExpression ifExpr = new IfExpression(curToken);
-        if (!expectPeek(TokenType.LPAREN)) return null;
-        ifExpr.setCondition(parseExpression(Precedence.LOWEST));
-        ifExpr.setConsequence(parseBlockStatement());
-        if (peekTokenIs(TokenType.ELSE)) {
-            nextToken();
-            ifExpr.setAlternative(parseBlockStatement());
-        }
-        return ifExpr;
-    }
-
-    private Expression parseFunctionLiteral() {
-        FunctionLiteral function = new FunctionLiteral(curToken);
-        if (!expectPeek(TokenType.LPAREN)) return null;
-        function.getParams().addAll(parseFunctionParameters());
-        function.setBody(parseBlockStatement());
-        return function;
     }
 
     private List<Identifier> parseFunctionParameters() {
@@ -197,14 +193,27 @@ public class Parser {
         return block;
     }
 
-    private Expression parseCallExpression(Expression func) {
-        CallExpression callExp = new CallExpression(curToken);
-        callExp.setFunction(func);
+    private Expression parseFunctionCall(Expression func) {
+        FunctionCall functionCall = new FunctionCall(curToken);
+        functionCall.setFunction(func);
         if (peekTokenIs(TokenType.RPAREN)) {
-            return callExp;
+            return functionCall;
         }
-        callExp.setArguments(parseCallArguments());
-        return callExp;
+        functionCall.setArguments(parseCallArguments());
+        return functionCall;
+    }
+
+    private List<Expression> parseGroupByElements() {
+        List<Expression> columns = new ArrayList<>();
+        nextToken();
+        columns.add(parseExpression(Precedence.LOWEST));
+        nextToken();
+        while (curTokenIs(TokenType.COMMA)) {
+            nextToken();
+            columns.add(parseExpression(Precedence.LOWEST));
+            nextToken();
+        }
+        return columns;
     }
 
     private List<Expression> parseCallArguments() {
@@ -246,27 +255,85 @@ public class Parser {
         return expr;
     }
 
-    private Expression parseArrayLiteral() {
-        ArrayLiteral array = new ArrayLiteral(curToken);
-        if (peekTokenIs(TokenType.RBRACKET)) {
-            nextToken();
-            return array;
-        }
-        while (!curTokenIs(TokenType.RBRACKET) && !curTokenIs(TokenType.EOF)) {
-            nextToken();
-            Expression elem = parseExpression(Precedence.LOWEST);
-            array.getElements().add(elem);
-            nextToken();
-        }
-        return array;
+    private Expression parseColumnName() {
+        ColumnReference aCol = new ColumnReference(curToken);
+        aCol.setColumnName(parseIdentifier());
+        return aCol;
     }
 
-    private Expression parseIndexExpression(Expression left) {
-        IndexExpression idxExpr = new IndexExpression(curToken, left);
+    private Expression parseColumnWithTableReference(Expression left) {
+        ColumnReference col = new ColumnReference(curToken);
+        if (!(left instanceof ColumnReference)) return null;
+        ColumnReference tableName = (ColumnReference) left;
+        col.setTableName(tableName.getColumnName());
+        col.setColumnName(parseIdentifier());
+        return col;
+    }
+
+    private Clause parseWhereClause() {
+        WhereClause whereClause = new WhereClause(curToken);
         nextToken();
-        idxExpr.setIndex(parseExpression(Precedence.LOWEST));
-        if (!expectPeek(TokenType.RBRACKET)) return null;
-        return idxExpr;
+        whereClause.setWhere(parseExpression(Precedence.LOWEST));
+        return whereClause;
+    }
+
+    private Clause parseGroupByClause() {
+        GroupByClause groupByClause = new GroupByClause(curToken);
+        nextToken();
+        groupByClause.setGroupByItems(parseGroupByElements());
+        return groupByClause;
+    }
+
+    private Clause parseHavingClause() {
+        HavingClause havingClause = new HavingClause(curToken);
+        nextToken();
+        havingClause.setHave(parseExpression(Precedence.LOWEST));
+        return havingClause;
+    }
+
+    private Clause parseOrderByClause() {
+        OrderByClause orderByClause = new OrderByClause(curToken);
+        nextToken();
+        orderByClause.setOrderByItems(parseOrderByElements());
+        return orderByClause;
+
+    }
+
+    private List<OrderByItem> parseOrderByElements() {
+        List<OrderByItem> orderByItems = new ArrayList<>();
+        nextToken();
+        orderByItems.add(parseOrderByItem());
+        nextToken();
+        while (curTokenIs(TokenType.COMMA)) {
+            nextToken();
+            orderByItems.add(parseOrderByItem());
+            nextToken();
+        }
+        return orderByItems;
+    }
+
+    private OrderByItem parseOrderByItem() {
+        OrderByItem orderByItem = new OrderByItem(curToken);
+        orderByItem.setOrderByExpression(parseExpression(Precedence.LOWEST));
+        if (peekTokenIs(TokenType.DESC) || peekTokenIs(TokenType.ASC)) {
+            nextToken();
+            orderByItem.setAsc(curToken.getType().equals(TokenType.ASC));
+        }
+        return orderByItem;
+    }
+
+    private Clause parseLimitClause() {
+        LimitClause limitClause = new LimitClause(curToken);
+        nextToken();
+        limitClause.setValue(parseExpression(Precedence.LOWEST));
+        return limitClause;
+    }
+
+    private Clause parseOffsetClause() {
+        OffsetClause offsetClause = new OffsetClause(curToken);
+        nextToken();
+        offsetClause.setValue(parseExpression(Precedence.LOWEST));
+        return offsetClause;
     }
 
     private boolean expectPeek(String tokType) {
@@ -300,6 +367,10 @@ public class Parser {
 
     public List<String> Debug() {
         return debug;
+    }
+
+    private boolean isClauseStart(Token token) {
+        return clauseStart.contains(token.getType());
     }
 
     private void addDebugStatement(String msg) {

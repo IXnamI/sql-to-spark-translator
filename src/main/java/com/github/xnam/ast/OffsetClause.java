@@ -6,13 +6,12 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class LimitOffsetClause implements Clause{
+public class OffsetClause implements Clause{
     Token token;
-    Integer value;
+    Expression value;
 
-    public LimitOffsetClause(Token token, Integer value) {
+    public OffsetClause(Token token) {
         this.token = token;
-        this.value = value;
     }
 
     public void clauseNode() {}
@@ -21,7 +20,7 @@ public class LimitOffsetClause implements Clause{
         StringBuilder output = new StringBuilder();
         output.append(token.getLiteral());
         output.append(" ");
-        output.append(value);
+        output.append(value.toString());
         return output.toString();
     }
 }

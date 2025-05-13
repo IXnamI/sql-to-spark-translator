@@ -1,12 +1,5 @@
 package Ast;
 
-import com.github.xnam.ast.Identifier;
-import com.github.xnam.ast.LetStatement;
-import com.github.xnam.ast.Program;
-import com.github.xnam.token.Token;
-import com.github.xnam.token.TokenType;
-import org.junit.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AstTest {

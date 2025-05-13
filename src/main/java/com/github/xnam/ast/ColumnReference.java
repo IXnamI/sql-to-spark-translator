@@ -8,8 +8,8 @@ import lombok.Setter;
 @Setter
 public class ColumnReference implements Expression {
     Token token;
-    String tableName;
-    String columnName;
+    Expression tableName;
+    Expression columnName;
 
     public ColumnReference(Token token) {
         this.token = token;

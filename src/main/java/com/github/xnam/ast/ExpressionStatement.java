@@ -9,6 +9,7 @@ import lombok.Setter;
 public class ExpressionStatement implements Statement{
     Token token;
     Expression expression;
+    Node parsedNode;
 
     public ExpressionStatement(Token token){
        this(null, token);
@@ -22,6 +23,7 @@ public class ExpressionStatement implements Statement{
     public void statementNode() {}
     public String toString() {
         if(expression != null) return expression.toString();
+        if (parsedNode != null) return parsedNode.toString();
         return "";
     }
 }

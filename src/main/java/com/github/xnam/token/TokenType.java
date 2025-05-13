@@ -90,6 +90,8 @@ public final class TokenType {
     public static final String FOLLOWING = "FOLLOWING";
     public static final String CURRENT = "CURRENT";
     public static final String ROW = "ROW";
+    public static final String TRUE = "TRUE";
+    public static final String FALSE = "FALSE";
 
     private Map<String, String> keywordsMapping;
 
@@ -152,6 +154,8 @@ public final class TokenType {
         keywordsMapping.put("following", FOLLOWING);
         keywordsMapping.put("current", CURRENT);
         keywordsMapping.put("row", ROW);
+        keywordsMapping.put("true", TRUE);
+        keywordsMapping.put("false", FALSE);
     }
 
     public static String searchIdent(String ident) {

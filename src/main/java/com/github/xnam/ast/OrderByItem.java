@@ -11,10 +11,8 @@ public class OrderByItem implements Clause {
     Expression orderByExpression;
     boolean asc;
 
-    public OrderByItem(Token token, Expression orderByExpression, boolean asc) {
+    public OrderByItem(Token token) {
         this.token = token;
-        this.orderByExpression = orderByExpression;
-        this.asc = asc;
     }
 
     public void clauseNode() {}

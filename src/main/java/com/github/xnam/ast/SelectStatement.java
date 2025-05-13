@@ -13,11 +13,12 @@ public class SelectStatement implements Statement {
     Token token;
     List<SelectItem> selectItems;
     TableSource from;
-    Expression where;
+    WhereClause where;
     List<JoinClause> joins;
     GroupByClause groupBy;
-    LimitOffsetClause limit;
-    LimitOffsetClause offset;
+    HavingClause having;
+    LimitClause limit;
+    OffsetClause offset;
 
     public SelectStatement(Token token) {
         this.token = token;
@@ -44,7 +45,7 @@ public class SelectStatement implements Statement {
             }
             output.append(String.join(", ", stringJoins));
         }
-        if (groupBy != null) output.append(groupBy.toString());
+        if (groupBy != null) output.append(groupBy.toString()).append(having.toString());
         if (limit != null) output.append(limit.toString());
         if (offset != null) output.append(offset.toString());
         return output.toString();

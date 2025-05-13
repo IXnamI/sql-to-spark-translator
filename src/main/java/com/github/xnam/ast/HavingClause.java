@@ -4,23 +4,23 @@ import com.github.xnam.token.Token;
 import lombok.Getter;
 import lombok.Setter;
 
-@Setter
 @Getter
-public class ReturnStatement implements Statement {
+@Setter
+public class HavingClause implements Clause{
     Token token;
-    Expression returnValue;
+    Expression have;
 
-    public ReturnStatement(Token token) {
+    public HavingClause(Token token) {
         this.token = token;
     }
 
-    public void statementNode() {}
+    public void clauseNode() {}
     public String tokenLiteral() { return token.getLiteral(); }
     public String toString() {
         StringBuilder output = new StringBuilder();
-        output.append(tokenLiteral()).append(" ");
-        if (returnValue != null) output.append(returnValue.toString());
-        output.append(";");
+        output.append(token.getLiteral());
+        output.append(" ");
+        output.append(have.toString());
         return output.toString();
     }
 }
