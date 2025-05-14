@@ -6,8 +6,7 @@ import com.github.xnam.token.Token;
 import com.github.xnam.lexer.Lexer;
 import com.github.xnam.token.TokenType;
 import com.github.xnam.utils.LoggingUtils;
-import com.sun.javafx.util.Logging;
-import com.sun.org.apache.xpath.internal.operations.Or;
+import lombok.extern.java.Log;
 
 import java.util.*;
 import java.util.function.Function;
@@ -22,7 +21,8 @@ public class Parser {
     Map<String, Function<Expression, Expression>> infixParseFns;
     Map<String, Supplier<Expression>> prefixParseFns;
     public static final Map<String, Integer> precedences = createPrecedenceMap();
-    public static final List<String> clauseStart = Arrays.asList(TokenType.WHERE, TokenType.GROUP, TokenType.HAVING, TokenType.ORDER, TokenType.LIMIT, TokenType.OFFSET);
+    public static final List<String> clauseStart = Arrays.asList(TokenType.WHERE, TokenType.GROUP, TokenType.HAVING, TokenType.ORDER, TokenType.LIMIT, TokenType.OFFSET, TokenType.JOIN, TokenType.OVER, TokenType.ROWS, TokenType.RANGE);
+    public static final Map<String, String> frameClauseMap = createFrameClauseMap();
 
     public Parser(Lexer lexer) {
         this.lexer = lexer;
@@ -43,6 +43,7 @@ public class Parser {
         registerInfix(TokenType.MINUS, this::parseInfixExpression);
         registerInfix(TokenType.SLASH, this::parseInfixExpression);
         registerInfix(TokenType.ASTERISK, this::parseInfixExpression);
+        registerInfix(TokenType.ASSIGN, this::parseInfixExpression);
         registerInfix(TokenType.EQ, this::parseInfixExpression);
         registerInfix(TokenType.NOT_EQ, this::parseInfixExpression);
         registerInfix(TokenType.LT, this::parseInfixExpression);
@@ -134,6 +135,13 @@ public class Parser {
                 return parseLimitClause();
             case TokenType.OFFSET:
                 return parseOffsetClause();
+            case TokenType.JOIN:
+                return parseJoinClause();
+            case TokenType.OVER:
+                return parseWindowClause();
+            case TokenType.RANGE:
+            case TokenType.ROWS:
+                return parseFrameClause();
             default:
                 return null;
         }
@@ -161,22 +169,6 @@ public class Parser {
         return new Boolean(curToken);
     }
 
-    private List<Identifier> parseFunctionParameters() {
-        List<Identifier> identList = new ArrayList<>();
-        if (peekTokenIs(TokenType.RPAREN)) {
-            nextToken();
-            return identList;
-        }
-        while(!curTokenIs(TokenType.RPAREN)) {
-            nextToken();
-            Identifier ident = (Identifier) parseIdentifier();
-            identList.add(ident);
-            assert peekTokenIs(TokenType.COMMA) || peekTokenIs(TokenType.RPAREN);
-            nextToken();
-        }
-        return identList;
-    }
-
     private StringLiteral parseStringLiteral() {
         return new StringLiteral(curToken, curToken.getLiteral());
     }
@@ -201,33 +193,6 @@ public class Parser {
         }
         functionCall.setArguments(parseCallArguments());
         return functionCall;
-    }
-
-    private List<Expression> parseGroupByElements() {
-        List<Expression> columns = new ArrayList<>();
-        nextToken();
-        columns.add(parseExpression(Precedence.LOWEST));
-        nextToken();
-        while (curTokenIs(TokenType.COMMA)) {
-            nextToken();
-            columns.add(parseExpression(Precedence.LOWEST));
-            nextToken();
-        }
-        return columns;
-    }
-
-    private List<Expression> parseCallArguments() {
-        List<Expression> argsList = new ArrayList<>();
-        nextToken();
-        argsList.add(parseExpression(Precedence.LOWEST));
-        nextToken();
-        while (curTokenIs(TokenType.COMMA)) {
-            nextToken();
-            argsList.add(parseExpression(Precedence.LOWEST));
-            nextToken();
-        }
-        assert curTokenIs(TokenType.RPAREN) : "Invalid arguments to call expression";
-        return argsList;
     }
 
     private Expression parsePrefixExpression() {
@@ -262,12 +227,39 @@ public class Parser {
     }
 
     private Expression parseColumnWithTableReference(Expression left) {
+        nextToken();
         ColumnReference col = new ColumnReference(curToken);
         if (!(left instanceof ColumnReference)) return null;
         ColumnReference tableName = (ColumnReference) left;
         col.setTableName(tableName.getColumnName());
         col.setColumnName(parseIdentifier());
         return col;
+    }
+
+    private Expression parseTableSource() {
+        TableSource tableSource = new TableSource(curToken);
+        if (curTokenIs(TokenType.IDENT)) {
+            tableSource.setTable(parseIdentifier());
+            if (peekTokenIs(TokenType.DOT)) {
+                nextToken();
+                nextToken();
+                tableSource.shiftTableNameToSchemaName(parseIdentifier());
+                if (peekTokenIs(TokenType.DOT)) {
+                    nextToken();
+                    nextToken();
+                    tableSource.shiftSchemaNameToDatabaseName(parseIdentifier());
+                }
+            }
+        } else if (curTokenIs(TokenType.LPAREN)) {
+            nextToken();
+            tableSource.setTable(parseStatement());
+        } else return null;
+        if (peekTokenIs(TokenType.AS)) {
+            nextToken();
+            nextToken();
+            tableSource.setAlias(parseIdentifier());
+        } else if (curTokenIs(TokenType.IDENT)) tableSource.setAlias(parseIdentifier());
+        return tableSource;
     }
 
     private Clause parseWhereClause() {
@@ -280,7 +272,7 @@ public class Parser {
     private Clause parseGroupByClause() {
         GroupByClause groupByClause = new GroupByClause(curToken);
         nextToken();
-        groupByClause.setGroupByItems(parseGroupByElements());
+        groupByClause.setGroupByItems(parseColumnReferenceList());
         return groupByClause;
     }
 
@@ -299,16 +291,84 @@ public class Parser {
 
     }
 
+    private Clause parseLimitClause() {
+        LimitClause limitClause = new LimitClause(curToken);
+        nextToken();
+        limitClause.setValue(parseExpression(Precedence.LOWEST));
+        return limitClause;
+    }
+
+    private Clause parseOffsetClause() {
+        OffsetClause offsetClause = new OffsetClause(curToken);
+        nextToken();
+        offsetClause.setValue(parseExpression(Precedence.LOWEST));
+        return offsetClause;
+    }
+
+    private Clause parseJoinClause() {
+        JoinClause joinClause = new JoinClause(curToken);
+        nextToken();
+        joinClause.setTable(parseTableSource());
+        if (!expectPeek(TokenType.ON)) return null;
+        nextToken();
+        joinClause.setOnCondition(parseExpression(Precedence.LOWEST));
+        return joinClause;
+    }
+
+    private Clause parseWindowClause() {
+        WindowClause windowClause = new WindowClause(curToken);
+        if (!expectPeek(TokenType.LPAREN)) return null;
+        if (!expectPeek(TokenType.PARTITION)) return null;
+        if (!expectPeek(TokenType.BY)) return null;
+        windowClause.setPartitionBy(parseColumnReferenceList());
+        if (peekTokenIs(TokenType.ORDER)) {
+            nextToken();
+            windowClause.setOrderBy((OrderByClause) parseOrderByClause());
+        }
+        if (peekTokenIs(TokenType.ROWS) || peekTokenIs(TokenType.RANGE)) {
+            nextToken();
+            windowClause.setFrame((FrameClause) parseFrameClause());
+            if (!expectPeek(TokenType.RPAREN)) return null;
+        }
+        if (!curTokenIs(TokenType.RPAREN)) return null;
+        return windowClause;
+    }
+
+    private Clause parseFrameClause() {
+        FrameClause frameClause = new FrameClause(curToken);
+        frameClause.setMode(curToken.getType().equals(TokenType.ROWS) ? FrameRange.ROWS : FrameRange.RANGE);
+        nextToken();
+        nextToken();
+        frameClause.setStart(parseFrameBoundType());
+        if (!peekTokenIs(TokenType.AND)) return frameClause;
+        nextToken();
+        nextToken();
+        frameClause.setEnd(parseFrameBoundType());
+        return frameClause;
+    }
+
+    private FrameBound parseFrameBoundType() {
+        FrameBound frameBound = new FrameBound(curToken);
+        StringBuilder output = new StringBuilder();
+        output.append(curToken.getType().equals(TokenType.INT) ? "N" : curToken.getLiteral());
+        nextToken();
+        output.append(curToken.getLiteral());
+        frameBound.setBoundType(frameClauseMap.getOrDefault(output.toString().toUpperCase(), null));
+        if (frameBound.hasConcreteRowsNum()) frameBound.setNumRows(Integer.parseInt(frameBound.tokenLiteral()));
+        return frameBound.getBoundType() == null ? null : frameBound;
+    }
+
     private List<OrderByItem> parseOrderByElements() {
         List<OrderByItem> orderByItems = new ArrayList<>();
         nextToken();
         orderByItems.add(parseOrderByItem());
-        nextToken();
+        if (peekTokenIs(TokenType.COMMA)) nextToken();
         while (curTokenIs(TokenType.COMMA)) {
             nextToken();
             orderByItems.add(parseOrderByItem());
-            nextToken();
+            if (peekTokenIs(TokenType.COMMA)) nextToken();
         }
+        System.out.println(logWithLocation(curToken + " " + peekToken));
         return orderByItems;
     }
 
@@ -322,18 +382,31 @@ public class Parser {
         return orderByItem;
     }
 
-    private Clause parseLimitClause() {
-        LimitClause limitClause = new LimitClause(curToken);
+    private List<Expression> parseColumnReferenceList() {
+        List<Expression> columns = new ArrayList<>();
         nextToken();
-        limitClause.setValue(parseExpression(Precedence.LOWEST));
-        return limitClause;
+        columns.add(parseExpression(Precedence.LOWEST));
+        if (peekTokenIs(TokenType.COMMA)) nextToken();
+        while (curTokenIs(TokenType.COMMA)) {
+            nextToken();
+            columns.add(parseExpression(Precedence.LOWEST));
+            if (peekTokenIs(TokenType.COMMA)) nextToken();
+        }
+        return columns;
     }
 
-    private Clause parseOffsetClause() {
-        OffsetClause offsetClause = new OffsetClause(curToken);
+    private List<Expression> parseCallArguments() {
+        List<Expression> argsList = new ArrayList<>();
         nextToken();
-        offsetClause.setValue(parseExpression(Precedence.LOWEST));
-        return offsetClause;
+        argsList.add(parseExpression(Precedence.LOWEST));
+        nextToken();
+        while (curTokenIs(TokenType.COMMA)) {
+            nextToken();
+            argsList.add(parseExpression(Precedence.LOWEST));
+            nextToken();
+        }
+        assert curTokenIs(TokenType.RPAREN) : "Invalid arguments to call expression";
+        return argsList;
     }
 
     private boolean expectPeek(String tokType) {
@@ -374,7 +447,7 @@ public class Parser {
     }
 
     private void addDebugStatement(String msg) {
-        debug.add(logWithLocation(msg));
+        debug.add(msg);
     }
 
     public void peekError(String tokType) {
@@ -400,6 +473,7 @@ public class Parser {
     private static Map<String, Integer> createPrecedenceMap() {
         Map<String, Integer> map = new HashMap<>();
         map.put(TokenType.EQ, Precedence.EQUALS);
+        map.put(TokenType.ASSIGN, Precedence.EQUALS);
         map.put(TokenType.NOT_EQ, Precedence.EQUALS);
         map.put(TokenType.LT, Precedence.LESSGREATER);
         map.put(TokenType.GT, Precedence.LESSGREATER);
@@ -409,6 +483,17 @@ public class Parser {
         map.put(TokenType.ASTERISK, Precedence.PRODUCT);
         map.put(TokenType.LPAREN, Precedence.CALL);
         map.put(TokenType.LBRACKET, Precedence.INDEX);
+        map.put(TokenType.DOT, Precedence.DOT);
         return Collections.unmodifiableMap(map);
+    }
+
+    private static Map<String, String> createFrameClauseMap() {
+        Map<String, String> map = new HashMap<>();
+        map.put("NPRECEDING", FrameBoundType.N_PRECEDING);
+        map.put("NFOLLOWING", FrameBoundType.N_FOLLOWING);
+        map.put("UNBOUNDEDPRECEDING", FrameBoundType.UNBOUNDED_PRECEDING);
+        map.put("UNBOUNDEDFOLLOWING", FrameBoundType.UNBOUNDED_FOLLOWING);
+        map.put("CURRENTROW", FrameBoundType.CURRENT_ROW);
+        return map;
     }
 }

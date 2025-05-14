@@ -9,11 +9,12 @@ import lombok.Setter;
 public class JoinClause implements Clause {
     Token token;
     String joinType;
-    TableSource table;
+    Expression table;
     Expression onCondition;
 
     public JoinClause(Token token) {
         this.token = token;
+        joinType = JoinType.INNER;
     }
 
     public void clauseNode() {}

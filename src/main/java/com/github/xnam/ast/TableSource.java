@@ -8,8 +8,10 @@ import lombok.Setter;
 @Setter
 public class TableSource implements Expression{
     Token token;
-    String tableName;
-    String alias;
+    Expression databaseName;
+    Expression schemaName;
+    Node table;
+    Expression alias;
 
     public TableSource(Token token) {
         this.token = token;
@@ -19,11 +21,19 @@ public class TableSource implements Expression{
     public String tokenLiteral() { return token.getLiteral(); };
     public String toString() {
         StringBuilder output = new StringBuilder();
-        output.append(tableName);
+        output.append(table);
         if (alias != null) {
             output.append(" AS ");
             output.append(alias);
         }
         return output.toString();
+    }
+    public void shiftSchemaNameToDatabaseName(Expression newSchemaName) {
+        this.databaseName = this.schemaName;
+        this.schemaName = newSchemaName;
+    }
+    public void shiftTableNameToSchemaName(Expression newTableName) {
+        this.schemaName = (Expression) this.table;
+        this.table = newTableName;
     }
 }

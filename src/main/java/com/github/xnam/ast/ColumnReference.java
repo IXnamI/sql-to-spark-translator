@@ -23,7 +23,7 @@ public class ColumnReference implements Expression {
             output.append(tableName);
             output.append(".");
         }
-        output.append(columnName);
+        output.append(columnName.toString());
         return output.toString();
     }
 }

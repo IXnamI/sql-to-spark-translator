@@ -8,5 +8,6 @@ public final class Precedence {
     static final int PRODUCT = 5;
     static final int PREFIX = 6;
     static final int CALL = 7;
-    static final int INDEX = 8;
+    static final int DOT = 8;
+    static final int INDEX = 9;
 }

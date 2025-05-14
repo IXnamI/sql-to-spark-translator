@@ -23,8 +23,8 @@ public class ParserTest {
         Parser parser = new Parser(lexer);
 
         Program program = parser.parseProgram();
-        checkParserErrors(parser);
         checkDebugStatements(parser);
+        checkParserErrors(parser);
 
         assert (program != null);
         assertEquals(1, program.getStatements().size());
@@ -48,8 +48,8 @@ public class ParserTest {
         Parser parser = new Parser(lexer);
 
         Program program = parser.parseProgram();
-        checkParserErrors(parser);
         checkDebugStatements(parser);
+        checkParserErrors(parser);
 
         assert (program != null);
         assertEquals(1, program.getStatements().size());
@@ -81,8 +81,8 @@ public class ParserTest {
         Parser parser = new Parser(lexer);
 
         Program program = parser.parseProgram();
-        checkParserErrors(parser);
         checkDebugStatements(parser);
+        checkParserErrors(parser);
 
         assert (program != null);
         assertEquals(1, program.getStatements().size());
@@ -98,8 +98,8 @@ public class ParserTest {
         ColumnReference col1 = (ColumnReference) groupBy.getGroupByItems().get(0);
         ColumnReference col2 = (ColumnReference) groupBy.getGroupByItems().get(1);
 
-        testColumnReference("department", col1);
-        testColumnReference("region", col2);
+        testColumnReference(null, "department", col1);
+        testColumnReference(null, "region", col2);
     }
 
     @Test
@@ -110,8 +110,8 @@ public class ParserTest {
         Parser parser = new Parser(lexer);
 
         Program program = parser.parseProgram();
-        checkParserErrors(parser);
         checkDebugStatements(parser);
+        checkParserErrors(parser);
 
         ExpressionStatement exprStmt = (ExpressionStatement) program.getStatements().get(0);
         assert(exprStmt.getParsedNode() instanceof OrderByClause);
@@ -139,8 +139,8 @@ public class ParserTest {
         Parser parser = new Parser(lexer);
 
         Program program = parser.parseProgram();
-        checkParserErrors(parser);
         checkDebugStatements(parser);
+        checkParserErrors(parser);
 
         ExpressionStatement exprStmt = (ExpressionStatement) program.getStatements().get(0);
         assert(exprStmt.getParsedNode() instanceof LimitClause);
@@ -157,8 +157,8 @@ public class ParserTest {
         Parser parser = new Parser(lexer);
 
         Program program = parser.parseProgram();
-        checkParserErrors(parser);
         checkDebugStatements(parser);
+        checkParserErrors(parser);
 
         ExpressionStatement exprStmt = (ExpressionStatement) program.getStatements().get(0);
         assert(exprStmt.getParsedNode() instanceof OffsetClause);
@@ -166,6 +166,97 @@ public class ParserTest {
         OffsetClause offsetClause = (OffsetClause) exprStmt.getParsedNode();
         testLiteralExpression(offsetClause.getValue(), 5);
     }
+
+    @Test
+    public void testJoinClause() {
+        String input = "JOIN orders ON users.id = orders.user_id";
+
+        Lexer lexer = new Lexer(input);
+        Parser parser = new Parser(lexer);
+
+        Program program = parser.parseProgram();
+        checkDebugStatements(parser);
+        checkParserErrors(parser);
+
+        ExpressionStatement exprStmt = (ExpressionStatement) program.getStatements().get(0);
+        assert(exprStmt.getParsedNode() instanceof JoinClause);
+
+        JoinClause joinClause = (JoinClause) exprStmt.getParsedNode();
+
+        assertEquals(JoinType.INNER, joinClause.getJoinType());
+        assert (joinClause.getTable() instanceof TableSource);
+        TableSource tableSource = (TableSource) joinClause.getTable();
+        assert (tableSource.getTable() instanceof Identifier);
+        Identifier tableName = (Identifier) tableSource.getTable();
+        testIdentifier("orders", tableName);
+        System.out.println(joinClause.getOnCondition().toString());
+        InfixExpression onExpr = (InfixExpression) joinClause.getOnCondition();
+        assertEquals("=", onExpr.getOperator());
+        ColumnReference left = (ColumnReference) onExpr.getLeftExpression();
+        ColumnReference right = (ColumnReference) onExpr.getRightExpression();
+        testColumnReference("users", "id", left);
+        testColumnReference("orders", "user_id", right);
+    }
+
+    @Test
+    public void testWindowClause() {
+        String input = "OVER (PARTITION BY department, region ORDER BY salary DESC ROWS BETWEEN 10 PRECEDING AND CURRENT ROW)";
+
+        Lexer lexer = new Lexer(input);
+        Parser parser = new Parser(lexer);
+
+        Program program = parser.parseProgram();
+        checkDebugStatements(parser);
+        checkParserErrors(parser);
+
+        ExpressionStatement exprStmt = (ExpressionStatement) program.getStatements().get(0);
+        assert(exprStmt.getParsedNode() instanceof WindowClause);
+
+        WindowClause window = (WindowClause) exprStmt.getParsedNode();
+
+        // Partition By
+        assertEquals(2, window.getPartitionBy().size());
+        ColumnReference partitionCol1 = (ColumnReference) window.getPartitionBy().get(0);
+        testColumnReference(null, "department", partitionCol1);
+        ColumnReference partitionCol2 = (ColumnReference) window.getPartitionBy().get(1);
+        testColumnReference(null, "region", partitionCol2);
+
+        // Order By
+        OrderByClause orderByClause = window.getOrderBy();
+        assertEquals(1, orderByClause.getOrderByItems().size());
+        OrderByItem orderItem = orderByClause.getOrderByItems().get(0);
+        ColumnReference orderCol = (ColumnReference) orderItem.getOrderByExpression();
+        testColumnReference(null, "salary", orderCol);
+        assert(!orderItem.isAsc());
+    }
+
+    @Test
+    public void testFrameClause() {
+        String input = "ROWS BETWEEN 10 PRECEDING AND CURRENT ROW";
+
+        Lexer lexer = new Lexer(input);
+        Parser parser = new Parser(lexer);
+
+        Program program = parser.parseProgram();
+        checkParserErrors(parser);
+
+        ExpressionStatement exprStmt = (ExpressionStatement) program.getStatements().get(0);
+        assert(exprStmt.getParsedNode() instanceof FrameClause);
+
+        FrameClause frameClause = (FrameClause) exprStmt.getParsedNode();
+        assertEquals(FrameRange.ROWS, frameClause.getMode());
+
+        FrameBound start = frameClause.getStart();
+        assert(start != null);
+        assertEquals(FrameBoundType.N_PRECEDING, start.getBoundType());
+        assert (start.getNumRows() == 10);
+
+        FrameBound end = frameClause.getEnd();
+        assert(end != null);
+        assertEquals(FrameBoundType.CURRENT_ROW, end.getBoundType());
+        assert (end.getNumRows() == null);
+    }
+
 
     private void checkParserErrors(Parser p) {
         List<String> errors = p.Errors();
@@ -193,11 +284,12 @@ public class ParserTest {
         assertEquals(literal.tokenLiteral(), String.valueOf(expectedIntValue));
     }
 
-    private void testColumnReference(String expected, Expression expr) {
+    private void testColumnReference(String expectedTable, String expectedCol, Expression expr) {
         assert(expr instanceof ColumnReference);
         ColumnReference aCol = (ColumnReference) expr;
         assert(aCol.getColumnName() instanceof Identifier);
-        testIdentifier(expected, aCol.getColumnName());
+        if (expectedTable != null) testIdentifier(expectedTable, aCol.getTableName());
+        testIdentifier(expectedCol, aCol.getColumnName());
     }
 
     private void testIdentifier(String expected, Expression expr) {
@@ -217,8 +309,6 @@ public class ParserTest {
     private void testLiteralExpression(Expression expr, Object expected) {
         if (expected instanceof Integer) {
             testIntegerLiteral((Integer) expected, expr);
-        } else if (expected instanceof String) {
-            testColumnReference((String) expected, expr);
         } else if (expected instanceof java.lang.Boolean) {
             testBooleanLiteral((java.lang.Boolean) expected, expr);
         } else {

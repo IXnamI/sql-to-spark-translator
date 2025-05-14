@@ -9,8 +9,8 @@ import lombok.Setter;
 public class FrameClause implements Clause {
     Token token;
     String mode;
-    String start;
-    String end;
+    FrameBound start;
+    FrameBound end;
 
     public FrameClause(Token token) {
         this.token = token;
@@ -26,4 +26,6 @@ public class FrameClause implements Clause {
         output.append(end);
         return output.toString();
     }
+    public boolean isRange() { return mode.equals(FrameRange.RANGE); }
+    public boolean hasEnd() { return end != null; }
 }
