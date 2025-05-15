@@ -6,7 +6,6 @@ import com.github.xnam.token.Token;
 import com.github.xnam.lexer.Lexer;
 import com.github.xnam.token.TokenType;
 import com.github.xnam.utils.LoggingUtils;
-import lombok.extern.java.Log;
 
 import java.util.*;
 import java.util.function.Function;
@@ -21,7 +20,7 @@ public class Parser {
     Map<String, Function<Expression, Expression>> infixParseFns;
     Map<String, Supplier<Expression>> prefixParseFns;
     public static final Map<String, Integer> precedences = createPrecedenceMap();
-    public static final List<String> clauseStart = Arrays.asList(TokenType.WHERE, TokenType.GROUP, TokenType.HAVING, TokenType.ORDER, TokenType.LIMIT, TokenType.OFFSET, TokenType.JOIN, TokenType.OVER, TokenType.ROWS, TokenType.RANGE);
+    public static final List<String> clauseStart = Arrays.asList(TokenType.WHERE, TokenType.GROUP, TokenType.HAVING, TokenType.ORDER, TokenType.LIMIT, TokenType.OFFSET, TokenType.JOIN, TokenType.OVER, TokenType.ROWS, TokenType.RANGE, TokenType.WHEN);
     public static final Map<String, String> frameClauseMap = createFrameClauseMap();
 
     public Parser(Lexer lexer) {
@@ -39,6 +38,7 @@ public class Parser {
         registerPrefix(TokenType.STRING, this::parseStringLiteral);
         registerPrefix(TokenType.TRUE, this::parseBoolean);
         registerPrefix(TokenType.FALSE, this::parseBoolean);
+        registerPrefix(TokenType.CASE, this::parseCaseExpression);
         registerInfix(TokenType.PLUS, this::parseInfixExpression);
         registerInfix(TokenType.MINUS, this::parseInfixExpression);
         registerInfix(TokenType.SLASH, this::parseInfixExpression);
@@ -48,6 +48,8 @@ public class Parser {
         registerInfix(TokenType.NOT_EQ, this::parseInfixExpression);
         registerInfix(TokenType.LT, this::parseInfixExpression);
         registerInfix(TokenType.GT, this::parseInfixExpression);
+        registerInfix(TokenType.LTE, this::parseInfixExpression);
+        registerInfix(TokenType.GTE, this::parseInfixExpression);
         registerInfix(TokenType.LPAREN, this::parseFunctionCall);
         registerInfix(TokenType.DOT, this::parseColumnWithTableReference);
         nextToken();
@@ -83,13 +85,43 @@ public class Parser {
         switch (curToken.getType()) {
             case TokenType.SELECT:
                 return parseSelectStatement();
+            case TokenType.WITH:
+                return parseWithStatement();
             default:
                 //Not really a thing in SQL, only for unit testing parsing expression and clauses
                 return parseTestStatement();
         }
     }
 
-    private SelectStatement parseSelectStatement() {
+    private Statement parseWithStatement() {
+        WithStatement withStatement = new WithStatement(curToken);
+        List<CommonTableExpression> commonTableExpressions = new ArrayList<>();
+        if (!expectPeek(TokenType.IDENT)) return null;
+        while (curTokenIs(TokenType.IDENT)) {
+            CommonTableExpression commonTableExpression = new CommonTableExpression(curToken);
+            if (peekTokenIs(TokenType.LPAREN)) {
+                nextToken();
+                commonTableExpression.setColumnAliases(parseColumnReferenceList());
+                if (!expectPeek(TokenType.RPAREN)) return null;
+            }
+            if (!expectPeek(TokenType.AS)) return null;
+            if (!expectPeek(TokenType.LPAREN)) return null;
+            nextToken();
+            commonTableExpression.setSubquery(parseSelectStatement());
+            if (!expectPeek(TokenType.RPAREN)) return null;
+            commonTableExpressions.add(commonTableExpression);
+            if (peekTokenIs(TokenType.COMMA)) {
+                nextToken();
+                nextToken();
+            }
+        }
+        withStatement.setCteList(commonTableExpressions);
+        nextToken();
+        withStatement.setMainQuery(parseSelectStatement());
+        return withStatement;
+    }
+
+    private Statement parseSelectStatement() {
         SelectStatement selectStatement = new SelectStatement(curToken);
         selectStatement.setSelectItems(parseSelectElements());
         nextToken();
@@ -170,6 +202,8 @@ public class Parser {
                 return parseJoinClause();
             case TokenType.OVER:
                 return parseWindowClause();
+            case TokenType.WHEN:
+                return parseWhenThenClause();
             case TokenType.RANGE:
             case TokenType.ROWS:
                 return parseFrameClause();
@@ -204,17 +238,6 @@ public class Parser {
         return new StringLiteral(curToken, curToken.getLiteral());
     }
 
-    private BlockStatement parseBlockStatement() {
-        BlockStatement block = new BlockStatement(curToken);
-        nextToken();
-        while (!curTokenIs(TokenType.RBRACKET) && !curTokenIs(TokenType.EOF)) {
-            Statement stmt = parseStatement();
-            assert stmt != null : "Failed to parse statement";
-            block.getStatements().add(stmt);
-            nextToken();
-        }
-        return block;
-    }
 
     private Expression parseFunctionCall(Expression func) {
         FunctionCall functionCall = new FunctionCall(curToken);
@@ -249,6 +272,22 @@ public class Parser {
             return null;
         }
         return expr;
+    }
+
+    private Expression parseCaseExpression() {
+        CaseExpression caseExpression = new CaseExpression(curToken);
+        nextToken();
+        while (curTokenIs(TokenType.WHEN)) {
+            caseExpression.getWhenThens().add(parseWhenThenClause());
+            if (peekTokenIs(TokenType.WHEN)) nextToken();
+        }
+        if (peekTokenIs(TokenType.ELSE)) {
+            nextToken();
+            nextToken();
+            caseExpression.setElseExpr(parseExpression(Precedence.LOWEST));
+        }
+        if (!expectPeek(TokenType.END)) return null;
+        return caseExpression;
     }
 
     private Expression parseColumnName() {
@@ -379,6 +418,16 @@ public class Parser {
         nextToken();
         frameClause.setEnd(parseFrameBoundType());
         return frameClause;
+    }
+
+    private Clause parseWhenThenClause() {
+        WhenThenClause whenThenClause = new WhenThenClause(curToken);
+        nextToken();
+        whenThenClause.setWhenExpr(parseExpression(Precedence.LOWEST));
+        if (!expectPeek(TokenType.THEN)) return null;
+        nextToken();
+        whenThenClause.setThenExpr(parseExpression(Precedence.LOWEST));
+        return whenThenClause;
     }
 
     private FrameBound parseFrameBoundType() {
@@ -534,6 +583,8 @@ public class Parser {
         map.put(TokenType.NOT_EQ, Precedence.EQUALS);
         map.put(TokenType.LT, Precedence.LESSGREATER);
         map.put(TokenType.GT, Precedence.LESSGREATER);
+        map.put(TokenType.LTE, Precedence.LESSGREATER);
+        map.put(TokenType.GTE, Precedence.LESSGREATER);
         map.put(TokenType.PLUS, Precedence.SUM);
         map.put(TokenType.MINUS, Precedence.SUM);
         map.put(TokenType.SLASH, Precedence.PRODUCT);

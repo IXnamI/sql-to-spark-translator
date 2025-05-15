@@ -1,5 +1,6 @@
 package com.github.xnam.ast;
 
+import com.github.xnam.codegen.CodegenVisitor;
 import com.github.xnam.token.Token;
 import lombok.Getter;
 import lombok.Setter;
@@ -22,5 +23,8 @@ public class HavingClause implements Clause{
         output.append(" ");
         output.append(have.toString());
         return output.toString();
+    }
+    public <R> R accept(CodegenVisitor<R> visitor) {
+        return visitor.visit(this);
     }
 }

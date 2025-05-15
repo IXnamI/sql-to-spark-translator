@@ -1,5 +1,6 @@
 package com.github.xnam.ast;
 
+import com.github.xnam.codegen.CodegenVisitor;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -27,4 +28,7 @@ public class Program implements Node{
         return output.toString();
     }
 
+    public <R> R accept(CodegenVisitor<R> visitor) {
+        return visitor.visit(this);
+    }
 }

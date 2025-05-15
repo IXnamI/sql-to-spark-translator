@@ -1,5 +1,6 @@
 package com.github.xnam.ast;
 
+import com.github.xnam.codegen.CodegenVisitor;
 import com.github.xnam.token.Token;
 import lombok.Getter;
 import lombok.Setter;
@@ -28,4 +29,7 @@ public class FrameClause implements Clause {
     }
     public boolean isRange() { return mode.equals(FrameRange.RANGE); }
     public boolean hasEnd() { return end != null; }
+    public <R> R accept(CodegenVisitor<R> visitor) {
+        return visitor.visit(this);
+    }
 }

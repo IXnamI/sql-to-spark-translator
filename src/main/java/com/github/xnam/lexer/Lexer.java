@@ -98,6 +98,7 @@ public class Lexer {
          case '.':
             tok = Token.newToken(TokenType.DOT, currentChar.toString());
             break;
+         case '\"':
          case '\'':
             tok = readString();
             break;
@@ -122,10 +123,11 @@ public class Lexer {
 
    private Token readIdentifier() {
       StringBuilder ident = new StringBuilder();
-      while (StringUtils.isLetter(currentChar)) {
+      while (StringUtils.isLetter(currentChar) || NumberUtils.isDigit(currentChar)) {
          ident.append(currentChar);
          readChar();
       }
+      if (NumberUtils.isDigit(ident.charAt(0))) return Token.newToken(TokenType.ILLEGAL, ident.toString());
       return Token.newToken(TokenType.IDENT, ident.toString());
    }
 
@@ -153,7 +155,7 @@ public class Lexer {
       StringBuilder string = new StringBuilder();
       readChar();
       while (true) {
-         if (currentChar == '\'' || currentChar == 0) break;
+         if (StringUtils.isStringEnd(currentChar) || currentChar == 0) break;
          string.append(currentChar);
          readChar();
       }

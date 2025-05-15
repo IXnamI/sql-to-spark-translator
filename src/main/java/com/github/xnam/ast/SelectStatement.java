@@ -1,5 +1,6 @@
 package com.github.xnam.ast;
 
+import com.github.xnam.codegen.CodegenVisitor;
 import com.github.xnam.token.Token;
 import lombok.Getter;
 import lombok.Setter;
@@ -37,23 +38,25 @@ public class SelectStatement implements Statement {
             stringSelectItems.add(item.toString());
         }
         output.append(String.join(", ", stringSelectItems));
-        output.append(" FROM ").append(from.toString()).append(" ");
+        output.append(" FROM ").append(from.toString());
         if (!joins.isEmpty()) {
             List<String> stringJoins = new ArrayList<>();
             for (JoinClause item : joins) {
                 stringJoins.add(item.toString());
             }
-            output.append(String.join(" ", stringJoins));
-            output.append(" ");
+            output.append(" ").append(String.join(" ", stringJoins));
         }
-        if (where != null) output.append(where.toString()).append(" ");
+        if (where != null) output.append(" ").append(where.toString());
         if (groupBy != null) {
-            output.append(groupBy.toString()).append(" ");
-            if (having != null) output.append(having.toString()).append(" ");
+            output.append(" ").append(groupBy.toString());
+            if (having != null) output.append(" ").append(having.toString());
         }
-        if (orderBy != null) output.append(orderBy.toString()).append(" ");
-        if (limit != null) output.append(limit.toString()).append(" ");
-        if (offset != null) output.append(offset.toString());
+        if (orderBy != null) output.append(" ").append(orderBy.toString());
+        if (limit != null) output.append(" ").append(limit.toString());
+        if (offset != null) output.append(" ").append(offset.toString());
         return output.toString();
+    }
+    public <R> R accept(CodegenVisitor<R> visitor) {
+        return visitor.visit(this);
     }
 }

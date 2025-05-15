@@ -1,5 +1,6 @@
 package com.github.xnam.ast;
 
+import com.github.xnam.codegen.CodegenVisitor;
 import com.github.xnam.token.Token;
 import lombok.Getter;
 import lombok.Setter;
@@ -25,5 +26,8 @@ public class ExpressionStatement implements Statement{
         if(expression != null) return expression.toString();
         if (parsedNode != null) return parsedNode.toString();
         return "";
+    }
+    public <R> R accept(CodegenVisitor<R> visitor) {
+        return visitor.visit(this);
     }
 }

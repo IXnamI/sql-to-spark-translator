@@ -1,5 +1,6 @@
 package com.github.xnam.ast;
 
+import com.github.xnam.codegen.CodegenVisitor;
 import com.github.xnam.token.Token;
 import lombok.Getter;
 import lombok.Setter;
@@ -27,5 +28,8 @@ public class FrameBound implements Clause {
         return output.toString();
     }
     public boolean hasConcreteRowsNum() { return boundType.equals(FrameBoundType.N_PRECEDING) || boundType.equals(FrameBoundType.N_FOLLOWING); }
+    public <R> R accept(CodegenVisitor<R> visitor) {
+        return visitor.visit(this);
+    }
 }
 

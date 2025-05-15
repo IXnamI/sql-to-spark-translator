@@ -6,14 +6,76 @@ import com.github.xnam.lexer.Lexer;
 import com.github.xnam.parser.Parser;
 import org.junit.Test;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class ParserTest {
+
+    @Test
+    public void testWithStatement() {
+        String input = "WITH cte1 AS (SELECT id FROM table1), " +
+                "cte2 AS (SELECT id FROM cte1) " +
+                "SELECT * FROM cte2";
+
+        Lexer lexer = new Lexer(input);
+        Parser parser = new Parser(lexer);
+
+        Program program = parser.parseProgram();
+        checkDebugStatements(parser);
+        checkParserErrors(parser);
+
+        System.out.println(program.toString());
+        assertEquals(1, program.getStatements().size());
+        Statement stmt = program.getStatements().get(0);
+        assert (stmt instanceof WithStatement);
+        WithStatement withStmt = (WithStatement) stmt;
+        assertEquals("WITH", withStmt.getToken().getLiteral());
+        assertEquals(2, withStmt.getCteList().size());
+
+        CommonTableExpression cte1 = withStmt.getCteList().get(0);
+        assertEquals("cte1", cte1.getToken().getLiteral());
+        assertEquals (0, cte1.getColumnAliases().size());
+        assert (cte1.getSubquery() instanceof SelectStatement);
+
+        SelectStatement cte1Select = (SelectStatement) cte1.getSubquery();
+        assertEquals(1, cte1Select.getSelectItems().size());
+        SelectItem cte1SelectItem = cte1Select.getSelectItems().get(0);
+        assert (cte1SelectItem.getSelectExpression() instanceof ColumnReference);
+        testColumnReference(null, "id", cte1SelectItem.getSelectExpression());
+        assert (cte1Select.getFrom() != null);
+        Expression fromTable = (Expression) cte1Select.getFrom().getTable();
+        testIdentifier("table1", fromTable);
+        assert (cte1Select.getFrom().getAlias() == null);
+
+        CommonTableExpression cte2 = withStmt.getCteList().get(1);
+        assertEquals("cte2", cte2.getToken().getLiteral());
+        assertEquals (0, cte2.getColumnAliases().size());
+        assert (cte2.getSubquery() instanceof SelectStatement);
+
+        SelectStatement cte2Select = (SelectStatement) cte2.getSubquery();
+        assertEquals(1, cte2Select.getSelectItems().size());
+        SelectItem cte2SelectItem = cte2Select.getSelectItems().get(0);
+        assert (cte2SelectItem.getSelectExpression() instanceof ColumnReference);
+        testColumnReference(null, "id", cte2SelectItem.getSelectExpression());
+        assert (cte2Select.getFrom() != null);
+        Expression fromTable2 = (Expression) cte2Select.getFrom().getTable();
+        testIdentifier("cte1", fromTable2);
+        assert (cte2Select.getFrom().getAlias() == null);
+
+        assert (withStmt.getMainQuery() instanceof SelectStatement);
+        SelectStatement mainSelect = (SelectStatement) withStmt.getMainQuery();
+        assertEquals(1, mainSelect.getSelectItems().size());
+        SelectItem mainSelectItem = mainSelect.getSelectItems().get(0);
+        assert (mainSelectItem.getSelectExpression() instanceof ColumnReference);
+        testColumnReference(null, "*", mainSelectItem.getSelectExpression());
+        // FROM cte_example in main query
+        assert (mainSelect.getFrom() != null);
+        Expression mainFromTable = (Expression) mainSelect.getFrom().getTable();
+        testIdentifier("cte2", mainFromTable);
+        assert (mainSelect.getFrom().getAlias() == null);
+    }
 
     @Test
     public void testFullSelectStatement() {
@@ -34,6 +96,7 @@ public class ParserTest {
         checkDebugStatements(parser);
         checkParserErrors(parser);
 
+        System.out.println(program.toString());
         assertEquals(1, program.getStatements().size());
         Statement stmt = program.getStatements().get(0);
         assert (stmt instanceof SelectStatement);
@@ -356,6 +419,60 @@ public class ParserTest {
         assertEquals(FrameBoundType.CURRENT_ROW, end.getBoundType());
         assert (end.getNumRows() == null);
     }
+
+    @Test
+    public void testCaseExpression() {
+        String input = "SELECT id, CASE WHEN salary > 100000 THEN 'High' " +
+                "WHEN salary >= 50000 THEN 'Medium' " +
+                "ELSE 'Low' END AS salary_band FROM employees";
+
+        Lexer lexer = new Lexer(input);
+        Parser parser = new Parser(lexer);
+
+        Program program = parser.parseProgram();
+        checkDebugStatements(parser);
+        checkParserErrors(parser);
+
+        System.out.println(program.toString());
+        assertEquals(1, program.getStatements().size());
+        Statement stmt = program.getStatements().get(0);
+        assert (stmt instanceof SelectStatement);
+
+        SelectStatement select = (SelectStatement) stmt;
+
+        // CASE expression in SelectItem[1]
+        assert (select.getSelectItems().size() >= 2);
+        SelectItem caseItem = select.getSelectItems().get(1);
+        assert (caseItem.getSelectExpression() instanceof CaseExpression);
+
+        CaseExpression caseExpr = (CaseExpression) caseItem.getSelectExpression();
+        // WHEN clauses count
+        assertEquals(2, caseExpr.getWhenThens().size());
+
+        // --- WHEN salary > 100000 THEN 'High' ---
+        WhenThenClause when1 = (WhenThenClause) caseExpr.getWhenThens().get(0);
+        InfixExpression when1Cond = (InfixExpression) when1.getWhenExpr();
+        assertEquals(">", when1Cond.getOperator());
+        testColumnReference(null, "salary", (ColumnReference) when1Cond.getLeftExpression());
+        assertEquals("100000", ((IntegerLiteral) when1Cond.getRightExpression()).getValue().toString());
+        assertEquals("High", ((StringLiteral) when1.getThenExpr()).getValue());
+
+        // --- WHEN salary >= 50000 THEN 'Medium' ---
+        WhenThenClause when2 = (WhenThenClause) caseExpr.getWhenThens().get(1);
+        InfixExpression when2Cond = (InfixExpression) when2.getWhenExpr();
+        assertEquals(">=", when2Cond.getOperator());
+        testColumnReference(null, "salary", (ColumnReference) when2Cond.getLeftExpression());
+        assertEquals("50000", ((IntegerLiteral) when2Cond.getRightExpression()).getValue().toString());
+        assertEquals("Medium", ((StringLiteral) when2.getThenExpr()).getValue());
+
+        // --- ELSE 'Low' ---
+        StringLiteral elseExpr = (StringLiteral) caseExpr.getElseExpr();
+        assertEquals("Low", elseExpr.getValue());
+
+        // Alias of CASE expression
+        testIdentifier("salary_band", caseItem.getAlias());
+    }
+
 
 
     private void checkParserErrors(Parser p) {

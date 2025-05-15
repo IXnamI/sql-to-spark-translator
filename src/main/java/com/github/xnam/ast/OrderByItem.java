@@ -1,5 +1,6 @@
 package com.github.xnam.ast;
 
+import com.github.xnam.codegen.CodegenVisitor;
 import com.github.xnam.token.Token;
 import lombok.Getter;
 import lombok.Setter;
@@ -23,5 +24,8 @@ public class OrderByItem implements Clause {
         String direction = asc ? "ASC" : "DESC";
         output.append(" ").append(direction);
         return output.toString();
+    }
+    public <R> R accept(CodegenVisitor<R> visitor) {
+        return visitor.visit(this);
     }
 }

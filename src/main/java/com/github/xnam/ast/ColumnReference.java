@@ -1,5 +1,6 @@
 package com.github.xnam.ast;
 
+import com.github.xnam.codegen.CodegenVisitor;
 import com.github.xnam.token.Token;
 import lombok.Getter;
 import lombok.Setter;
@@ -25,5 +26,8 @@ public class ColumnReference implements Expression {
         }
         output.append(columnName.toString());
         return output.toString();
+    }
+    public <R> R accept(CodegenVisitor<R> visitor) {
+        return visitor.visit(this);
     }
 }

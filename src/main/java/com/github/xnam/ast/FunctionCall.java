@@ -1,5 +1,6 @@
 package com.github.xnam.ast;
 
+import com.github.xnam.codegen.CodegenVisitor;
 import com.github.xnam.token.Token;
 import lombok.Getter;
 import lombok.Setter;
@@ -34,5 +35,8 @@ public class FunctionCall implements Expression {
         output.append(")");
         if (windowClause != null) output.append(windowClause.toString());
         return output.toString();
+    }
+    public <R> R accept(CodegenVisitor<R> visitor) {
+        return visitor.visit(this);
     }
 }
