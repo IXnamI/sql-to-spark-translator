@@ -21,8 +21,8 @@ public class JoinClause implements Clause {
     public String tokenLiteral() { return token.getLiteral(); };
     public String toString() {
         StringBuilder output = new StringBuilder();
-        output.append(joinType);
-        output.append(tokenLiteral());
+        output.append(joinType).append(" ");
+        output.append(tokenLiteral()).append(" ");
         output.append(table.toString());
         output.append(" ON ");
         output.append(onCondition.toString());

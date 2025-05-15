@@ -9,7 +9,7 @@ import lombok.Setter;
 public class SelectItem implements Expression {
     Token token;
     Expression selectExpression;
-    String alias;
+    Expression alias;
 
     public SelectItem(Token token) {
         this.token = token;

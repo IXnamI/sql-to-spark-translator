@@ -71,7 +71,9 @@ public class Parser {
         Program program = new Program();
         while (!curToken.getType().equals(TokenType.EOF)) {
            Statement stmt = parseStatement();
-           if (stmt != null) program.getStatements().add(stmt);
+           if (stmt != null) {
+               program.getStatements().add(stmt);
+           }
            nextToken();
         }
         return program;
@@ -89,8 +91,37 @@ public class Parser {
 
     private SelectStatement parseSelectStatement() {
         SelectStatement selectStatement = new SelectStatement(curToken);
-        while (isClauseStart(curToken)) {
-            Clause clause = parseClause();
+        selectStatement.setSelectItems(parseSelectElements());
+        nextToken();
+        nextToken();
+        selectStatement.setFrom((TableSource) parseTableSource());
+        while (peekTokenIs(TokenType.JOIN)) {
+            nextToken();
+            selectStatement.getJoins().add((JoinClause) parseJoinClause());
+        }
+        if (peekTokenIs(TokenType.WHERE)) {
+            nextToken();
+            selectStatement.setWhere((WhereClause) parseWhereClause());
+        }
+        if (peekTokenIs(TokenType.GROUP)) {
+            nextToken();
+            selectStatement.setGroupBy((GroupByClause) parseGroupByClause());
+        }
+        if (peekTokenIs(TokenType.HAVING)) {
+            nextToken();
+            selectStatement.setHaving((HavingClause) parseHavingClause());
+        }
+        if (peekTokenIs(TokenType.ORDER)) {
+            nextToken();
+            selectStatement.setOrderBy((OrderByClause) parseOrderByClause());
+        }
+        if (peekTokenIs(TokenType.LIMIT)) {
+            nextToken();
+            selectStatement.setLimit((LimitClause) parseLimitClause());
+        }
+        if (peekTokenIs(TokenType.OFFSET)) {
+            nextToken();
+            selectStatement.setOffset((OffsetClause) parseOffsetClause());
         }
         return selectStatement;
     }
@@ -187,7 +218,7 @@ public class Parser {
 
     private Expression parseFunctionCall(Expression func) {
         FunctionCall functionCall = new FunctionCall(curToken);
-        functionCall.setFunction(func);
+        functionCall.setFunction(((ColumnReference) func).getColumnName());
         if (peekTokenIs(TokenType.RPAREN)) {
             return functionCall;
         }
@@ -258,7 +289,10 @@ public class Parser {
             nextToken();
             nextToken();
             tableSource.setAlias(parseIdentifier());
-        } else if (curTokenIs(TokenType.IDENT)) tableSource.setAlias(parseIdentifier());
+        } else if (peekTokenIs(TokenType.IDENT)) {
+            nextToken();
+            tableSource.setAlias(parseIdentifier());
+        }
         return tableSource;
     }
 
@@ -368,7 +402,6 @@ public class Parser {
             orderByItems.add(parseOrderByItem());
             if (peekTokenIs(TokenType.COMMA)) nextToken();
         }
-        System.out.println(logWithLocation(curToken + " " + peekToken));
         return orderByItems;
     }
 
@@ -380,6 +413,30 @@ public class Parser {
             orderByItem.setAsc(curToken.getType().equals(TokenType.ASC));
         }
         return orderByItem;
+    }
+
+    private List<SelectItem> parseSelectElements() {
+        List<SelectItem> selectItems = new ArrayList<>();
+        nextToken();
+        selectItems.add(parseSelectItem());
+        if (peekTokenIs(TokenType.COMMA)) nextToken();
+        while (curTokenIs(TokenType.COMMA)) {
+            nextToken();
+            selectItems.add(parseSelectItem());
+            if (peekTokenIs(TokenType.COMMA)) nextToken();
+        }
+        return selectItems;
+    }
+
+    private SelectItem parseSelectItem() {
+        SelectItem selectItem = new SelectItem(curToken);
+        selectItem.setSelectExpression(parseExpression(Precedence.LOWEST));
+        if (peekTokenIs(TokenType.AS)) {
+            nextToken();
+            nextToken();
+            selectItem.setAlias(parseIdentifier());
+        }
+        return selectItem;
     }
 
     private List<Expression> parseColumnReferenceList() {
