@@ -35,6 +35,9 @@ public class CaseExpression implements Expression {
         output.append(" END");
         return output.toString();
     }
+    public boolean hasElse() {
+        return elseExpr != null;
+    }
     public <R> R accept(CodegenVisitor<R> visitor) {
         return visitor.visit(this);
     }
