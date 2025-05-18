@@ -3,7 +3,28 @@ package com.github.xnam.codegen;
 import com.github.xnam.ast.*;
 import com.github.xnam.ast.Boolean;
 
-public class SparkScalaCodeGenerator implements CodegenVisitor<String>{
+import java.util.*;
+import java.util.stream.Collectors;
+
+import static com.github.xnam.ast.FrameBoundType.*;
+
+public class SparkScalaCodeGenerator implements CodegenVisitor<String> {
+    public ArrayList<String> windowSpecMapping = new ArrayList<>();
+    private final HashMap<String, String> knownTables = new HashMap<>();
+    private ArrayList<String> emittedStatements = new ArrayList<>();
+
+    public String generateCode(Node program) {
+        String queryCode = program.accept(this);
+
+        StringBuilder finalCode = new StringBuilder();
+        for (String decl : emittedStatements) {
+            finalCode.append(decl).append("\n");
+        }
+        finalCode.append("\nval result = ").append(queryCode);
+
+        return finalCode.toString();
+    }
+
     public String visit(Boolean booleanLiteral) {
         return booleanLiteral.tokenLiteral();
     }
@@ -40,7 +61,18 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String>{
     }
 
     public String visit(CommonTableExpression commonTableExpression) {
-        return null;
+        StringBuilder code = new StringBuilder();
+
+        String cteName = commonTableExpression.getToken().getLiteral();
+        String subqueryCode = commonTableExpression.getSubquery().accept(this);
+
+        code.append("val ").append(cteName).append(" = ").append(subqueryCode);
+        knownTables.put(cteName, cteName); // So other clauses refer to this
+
+        // Collect the val declaration to emit at the top
+        emittedStatements.add(code.toString());
+
+        return cteName; // Returned if this CTE is used inside a subquery
     }
 
     public String visit(ExpressionStatement expressionStatement) {
@@ -48,23 +80,64 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String>{
     }
 
     public String visit(FrameBound frameBound) {
-        return null;
+        switch (frameBound.getBoundType()) {
+            case UNBOUNDED_PRECEDING:
+                return "Window.unboundedPreceding";
+            case UNBOUNDED_FOLLOWING:
+                return "Window.unboundedFollowing";
+            case CURRENT_ROW:
+                return "Window.currentRow";
+            case N_PRECEDING:
+                return "-" + frameBound.getNumRows();
+            case N_FOLLOWING:
+                return String.valueOf(frameBound.getNumRows());
+            default:
+                throw new UnsupportedOperationException("Unknown frame bound type: " + frameBound.getBoundType());
+        }
     }
 
     public String visit(FrameClause frameClause) {
-        return null;
+        String start = frameClause.getStart().accept(this);
+        String end = frameClause.getEnd().accept(this);
+
+        if (frameClause.isRange()) {
+            return ".rangeBetween(" + start + ", " + end + ")";
+        } else {
+            return ".rowsBetween(" + start + ", " + end + ")";
+        }
     }
 
     public String visit(FunctionCall functionCall) {
-        return null;
+        StringBuilder code = new StringBuilder();
+
+        String functionName = ((Identifier) functionCall.getFunction()).getValue().toLowerCase(); // normalize to lower-case
+
+        // Spark uses imported functions like count, sum, etc.
+        code.append(functionName).append("(");
+
+        List<String> args = functionCall.getArguments().stream()
+                .map(arg -> arg.accept(this))
+                .collect(Collectors.toList());
+
+        code.append(String.join(", ", args)).append(")");
+
+        return code.toString();
     }
 
     public String visit(GroupByClause groupByClause) {
-        return null;
+        if (groupByClause.getGroupByItems().isEmpty()) {
+            return "";
+        }
+
+        String groupCols = groupByClause.getGroupByItems().stream()
+                .map(expr -> expr.accept(this))
+                .collect(Collectors.joining(", "));
+
+        return ".groupBy(" + groupCols + ")";
     }
 
     public String visit(HavingClause havingClause) {
-        return null;
+        return ".filter(" + havingClause.getHave().accept(this) + ")";
     }
 
     public String visit(Identifier identifier) {
@@ -101,27 +174,71 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String>{
     }
 
     public String visit(JoinClause joinClause) {
-        return null;
+        StringBuilder code = new StringBuilder();
+
+        // Get the join type (default to inner)
+        String joinType = joinClause.getJoinType().toString().toLowerCase(); // e.g., "inner", "left"
+
+        // The joined table source — must already have emitted val <alias> = ...
+        String rightTableAlias = joinClause.getTable().accept(this); // just returns the alias name
+
+        // Join condition
+        String onCondition = joinClause.getOnCondition().accept(this); // e.g., col("a.id") === col("b.id")
+
+        // Emit .join(right, condition, type)
+        code.append(".join(")
+                .append(rightTableAlias)
+                .append(", ")
+                .append(onCondition)
+                .append(", ")
+                .append("\"").append(joinType).append("\"")
+                .append(")");
+
+        return code.toString();
     }
 
     public String visit(LimitClause limitClause) {
-        return null;
+        return ".limit(" + limitClause.getValue().accept(this) + ")";
     }
 
     public String visit(OffsetClause offsetClause) {
-        return null;
+        return "// OFFSET " + offsetClause.getValue().accept(this) + " -- not natively supported in Spark DataFrame API";
     }
 
     public String visit(OrderByClause orderByClause) {
-        return null;
+        if (orderByClause.getOrderByItems().isEmpty()) {
+            return "";
+        }
+
+        String items = orderByClause.getOrderByItems().stream()
+                .map(item -> item.accept(this))
+                .collect(Collectors.joining(", "));
+
+        return ".orderBy(" + items + ")";
     }
 
     public String visit(OrderByItem orderByItem) {
-        return null;
+        String expr = orderByItem.getOrderByExpression().accept(this);
+        if (orderByItem.isAsc()) {
+            return expr + ".asc";
+        } else {
+            return expr + ".desc";
+        }
     }
 
     public String visit(PrefixExpression prefixExpression) {
-        return null;
+        String right = prefixExpression.getRightExpression().accept(this);
+
+        switch (prefixExpression.getOperator()) {
+            case "NOT":
+                return "!" + right;
+            case "-":
+                return "-" + right;
+            case "+":
+                return right;
+            default:
+                throw new UnsupportedOperationException("Unknown prefix operator: " + prefixExpression.getOperator());
+        }
     }
 
     public String visit(Program program) {
@@ -133,11 +250,96 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String>{
     }
 
     public String visit(SelectItem selectItem) {
-        return null;
+        StringBuilder output = new StringBuilder();
+
+        String expressionCode = selectItem.getSelectExpression().accept(this);
+        output.append(expressionCode);
+
+        if (selectItem.getAlias() != null) {
+            output.append(".alias(\"").append(selectItem.getAlias().accept(this)).append("\")");
+        }
+
+        return output.toString();
     }
 
-    public String visit(SelectStatement selectStatement) {
-        return null;
+    public String visit(SelectStatement select) {
+        StringBuilder code = new StringBuilder();
+
+        // FROM
+        String fromAlias = select.getFrom().accept(this);
+        code.append(fromAlias);
+
+        // WHERE
+        if (select.getWhere() != null) {
+            code.append(select.getWhere().accept(this)); // .filter(...)
+        }
+
+        // JOINS
+        for (JoinClause join : select.getJoins()) {
+            code.append(join.accept(this)); // .join(...)
+        }
+
+        // GROUP BY
+        boolean hasGroupBy = select.getGroupBy() != null && !select.getGroupBy().getGroupByItems().isEmpty();
+        if (hasGroupBy) {
+            code.append(select.getGroupBy().accept(this)); // .groupBy(...)
+        }
+
+        // AGGREGATION
+        Set<String> aggregatedAliases = new HashSet<>();
+        List<String> aggExprs = new ArrayList<>();
+
+        for (SelectItem item : select.getSelectItems()) {
+            if (isAggregate(item.getSelectExpression())) {
+                aggExprs.add(item.accept(this));
+                if (item.getAlias() != null) {
+                    aggregatedAliases.add(((Identifier) item.getAlias()).getValue());
+                }
+            }
+        }
+
+        if (hasGroupBy || !aggExprs.isEmpty()) {
+            code.append(".agg(").append(String.join(", ", aggExprs)).append(")");
+        }
+
+        // HAVING (after .agg())
+        if (select.getHaving() != null) {
+            code.append(select.getHaving().accept(this)); // .filter(...)
+        }
+
+        // ORDER BY
+        if (select.getOrderBy() != null) {
+            code.append(select.getOrderBy().accept(this));
+        }
+
+        // LIMIT
+        if (select.getLimit() != null) {
+            code.append(select.getLimit().accept(this));
+        }
+
+        // OFFSET (emit as comment)
+        if (select.getOffset() != null) {
+            code.append("\n").append(select.getOffset().accept(this));
+        }
+
+        // FINAL SELECT
+        if (!select.getSelectItems().isEmpty()) {
+            List<String> projectionExprs = new ArrayList<>();
+
+            for (SelectItem item : select.getSelectItems()) {
+                Identifier alias = (Identifier) item.getAlias();
+
+                if (alias != null && aggregatedAliases.contains(alias.getValue())) {
+                    projectionExprs.add("col(\"" + alias.getValue() + "\")");
+                } else {
+                    projectionExprs.add(item.accept(this));
+                }
+            }
+
+            code.append(".select(").append(String.join(", ", projectionExprs)).append(")");
+        }
+
+        return code.toString();
     }
 
     public String visit(StringLiteral stringLiteral) {
@@ -145,18 +347,88 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String>{
     }
 
     public String visit(TableSource tableSource) {
-        return null;
+        StringBuilder declaration = new StringBuilder();
+
+        // Resolve alias
+        String alias;
+        if (tableSource.getAlias() != null) {
+            alias = tableSource.getAlias().accept(this);
+        } else if (tableSource.getTable() instanceof Identifier) {
+            alias = ((Identifier) tableSource.getTable()).getValue();
+        } else {
+            alias = "df_" + System.currentTimeMillis();
+        }
+
+        // Is it a subquery?
+        if (tableSource.getTable() instanceof SelectStatement) {
+            String subqueryCode = ((SelectStatement) tableSource.getTable()).accept(this);
+            declaration.append("val ").append(alias).append(" = ").append(subqueryCode);
+            knownTables.put(alias, alias);
+            emittedStatements.add(declaration.toString());
+        } else {
+            String baseName = (tableSource.getTable() instanceof Identifier)
+                    ? ((Identifier) tableSource.getTable()).getValue()
+                    : alias;
+
+            // Only declare the base table if not declared
+            if (!knownTables.containsKey(baseName)) {
+                emittedStatements.add("val " + baseName + " = // User needs to define this table");
+                knownTables.put(baseName, baseName);
+            }
+
+            // Create alias if needed
+            if (!alias.equals(baseName) && !knownTables.containsKey(alias)) {
+                emittedStatements.add("val " + alias + " = " + baseName);
+                knownTables.put(alias, alias);
+            }
+        }
+
+        return alias; // This is used inside .join(...), etc.
     }
 
     public String visit(WhereClause whereClause) {
-        return null;
+        return ".filter(" + whereClause.getWhere().accept(this) + ")";
     }
 
     public String visit(WindowClause windowClause) {
-        return null;
+        StringBuilder output = new StringBuilder();
+        output.append("Window");
+        if (!windowClause.getPartitionBy().isEmpty()) {
+            String partitions = windowClause.getPartitionBy().stream()
+                    .map(expr -> expr.accept(this))
+                    .collect(Collectors.joining(", "));
+            output.append(".partitionBy(").append(partitions).append(")");
+        }
+        if (windowClause.getOrderBy() != null) output.append(windowClause.getOrderBy().accept(this));
+        if (windowClause.getFrame() != null) output.append(windowClause.getFrame().accept(this));
+        String windowName = "windowSpec" + windowSpecMapping.size();
+        windowSpecMapping.add(output.toString());
+        return windowName;
     }
 
     public String visit(WithStatement withStatement) {
-        return null;
+        StringBuilder code = new StringBuilder();
+
+        // 1. Process all CTEs
+        for (CommonTableExpression cte : withStatement.getCteList()) {
+            cte.accept(this); // Adds to emittedStatements
+        }
+
+        // 2. Main query (select or with-nested-select)
+        String mainQuery = withStatement.getMainQuery().accept(this);
+
+        code.append(mainQuery);
+
+        return code.toString();
     }
+
+    private boolean isAggregate(Expression expr) {
+        if (expr instanceof FunctionCall) {
+            String functionName =  ((Identifier) ((FunctionCall) expr).getFunction()).getValue().toLowerCase();
+            return functionName.equals("count") || functionName.equals("sum") || functionName.equals("avg")
+                    || functionName.equals("min") || functionName.equals("max");
+        }
+        return false;
+    }
+
 }

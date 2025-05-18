@@ -231,9 +231,9 @@ public class ParserTest {
         IntegerLiteral integerLiteral = (IntegerLiteral) having.getRightExpression();
         assertEquals(">", having.getOperator());
         testLiteralExpression(integerLiteral, 5);
-        testLiteralExpression(funcCall.getFunction(), "COUNT");
+        testIdentifier("COUNT", funcCall.getFunction());
         assertEquals(funcCall.getArguments().size(), 1);
-        testLiteralExpression(funcCall.getArguments().get(0), "*");
+        testColumnReference(null, "*", funcCall.getArguments().get(0));
     }
 
     @Test
