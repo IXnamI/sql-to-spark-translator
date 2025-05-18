@@ -6,10 +6,19 @@ A tool designed to converts standard SQL queries into equivalent Apache Spark co
 
 ## Features
 
-- Support for SELECT, WHERE, JOIN, GROUP BY, ORDER BY
+- Support for most basic statements
 - Nested queries and subqueries
 - Basic Window functions
 - Translation into Spark Scala
+
+---
+
+## TODO: 
+
+- Support for all tokens available in the SQL syntax, ie: IN, VALUES, BETWEEN-AND, ...
+- Auto formatter of outputted code. 
+- Compression of unneeded generated code.
+- Maybe translation into Spark Python.
 
 ---
 
