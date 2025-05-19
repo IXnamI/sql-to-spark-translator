@@ -14,6 +14,7 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String> {
     private ArrayList<String> emittedStatements = new ArrayList<>();
 
     public String generateCode(Node program) {
+        SparkCodeFormatter codeFormatter = new SparkCodeFormatter();
         String queryCode = program.accept(this);
 
         StringBuilder finalCode = new StringBuilder();
@@ -22,7 +23,7 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String> {
         }
         finalCode.append("\nval result = ").append(queryCode);
 
-        return finalCode.toString();
+        return codeFormatter.format(finalCode.toString());
     }
 
     public String visit(Boolean booleanLiteral) {
