@@ -9,15 +9,30 @@ import java.util.stream.Collectors;
 import static com.github.xnam.ast.FrameBoundType.*;
 
 public class SparkScalaCodeGenerator implements CodegenVisitor<String> {
-    public ArrayList<String> windowSpecMapping = new ArrayList<>();
-    private final HashMap<String, String> knownTables = new HashMap<>();
-    private ArrayList<String> emittedStatements = new ArrayList<>();
+    public final ArrayList<String> windowSpecMapping = new ArrayList<>();
+    public final HashMap<String, String> knownTables = new HashMap<>();
+    public final ArrayList<String> emittedStatements = new ArrayList<>();
+    public final ArrayList<String> unknownTableStatements = new ArrayList<>();
+    public final List<String> aggregateFunctions = Arrays.asList(
+            "APPROX_COUNT_DISTINCT", "AVG", "GROUPING", "COUNT", "MAX", "MIN",
+            "STDEV", "SUM", "VAR_POP", "VAR_SAMP", "VARIANCE", "APPROX_PERCENTILE",
+            "CORR", "COVAR_POP", "COVAR_SAMP", "FIRST", "LAST", "MEDIAN",
+            "PERCENTILE_CONT", "PERCENTILE_DISC", "REGR_AVGX", "REGR_AVGY",
+            "REGR_COUNT", "REGR_INTERCEPT", "REGR_R2", "REGR_SLOPE", "REGR_SXX",
+            "REGR_SXY", "REGR_SYY", "STDDEV_POP", "STDDEV_SAMP", "SUM_DISTINCT"
+    );
 
     public String generateCode(Node program) {
         SparkCodeFormatter codeFormatter = new SparkCodeFormatter();
         String queryCode = program.accept(this);
 
         StringBuilder finalCode = new StringBuilder();
+        for (String decl : unknownTableStatements) {
+            finalCode.append(decl).append("\n");
+        }
+        for (int i = 0; i < windowSpecMapping.size(); i++) {
+            finalCode.append("val windowSpec").append(i+1).append(" = ").append(windowSpecMapping.get(i)).append("\n");
+        }
         for (String decl : emittedStatements) {
             finalCode.append(decl).append("\n");
         }
@@ -68,12 +83,11 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String> {
         String subqueryCode = commonTableExpression.getSubquery().accept(this);
 
         code.append("val ").append(cteName).append(" = ").append(subqueryCode);
-        knownTables.put(cteName, cteName); // So other clauses refer to this
+        knownTables.put(cteName, cteName);
 
-        // Collect the val declaration to emit at the top
         emittedStatements.add(code.toString());
 
-        return cteName; // Returned if this CTE is used inside a subquery
+        return cteName;
     }
 
     public String visit(ExpressionStatement expressionStatement) {
@@ -113,7 +127,6 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String> {
 
         String functionName = ((Identifier) functionCall.getFunction()).getValue().toLowerCase(); // normalize to lower-case
 
-        // Spark uses imported functions like count, sum, etc.
         code.append(functionName).append("(");
 
         List<String> args = functionCall.getArguments().stream()
@@ -121,6 +134,10 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String> {
                 .collect(Collectors.toList());
 
         code.append(String.join(", ", args)).append(")");
+
+        if (functionCall.getWindowClause() != null) {
+            code.append("over.(").append(functionCall.getWindowClause().accept(this)).append(")");
+        }
 
         return code.toString();
     }
@@ -163,7 +180,7 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String> {
                 sparkOperator = "||";
                 break;
             default:
-                sparkOperator = operator; // +, -, *, /, etc. remain the same
+                sparkOperator = operator;
                 break;
         }
 
@@ -177,14 +194,9 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String> {
     public String visit(JoinClause joinClause) {
         StringBuilder code = new StringBuilder();
 
-        // Get the join type (default to inner)
-        String joinType = joinClause.getJoinType().toString().toLowerCase(); // e.g., "inner", "left"
-
-        // The joined table source — must already have emitted val <alias> = ...
-        String rightTableAlias = joinClause.getTable().accept(this); // just returns the alias name
-
-        // Join condition
-        String onCondition = joinClause.getOnCondition().accept(this); // e.g., col("a.id") === col("b.id")
+        String joinType = joinClause.getJoinType().toLowerCase();
+        String rightTableAlias = joinClause.getTable().accept(this);
+        String onCondition = joinClause.getOnCondition().accept(this);
 
         // Emit .join(right, condition, type)
         code.append(".join(")
@@ -203,7 +215,7 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String> {
     }
 
     public String visit(OffsetClause offsetClause) {
-        return "// OFFSET " + offsetClause.getValue().accept(this) + " -- not natively supported in Spark DataFrame API";
+        return ".offset(" + offsetClause.getValue().accept(this) + ")";
     }
 
     public String visit(OrderByClause orderByClause) {
@@ -270,23 +282,19 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String> {
         String fromAlias = select.getFrom().accept(this);
         code.append(fromAlias);
 
-        // WHERE
         if (select.getWhere() != null) {
-            code.append(select.getWhere().accept(this)); // .filter(...)
+            code.append(select.getWhere().accept(this));
         }
 
-        // JOINS
         for (JoinClause join : select.getJoins()) {
-            code.append(join.accept(this)); // .join(...)
+            code.append(join.accept(this));
         }
 
-        // GROUP BY
         boolean hasGroupBy = select.getGroupBy() != null && !select.getGroupBy().getGroupByItems().isEmpty();
         if (hasGroupBy) {
-            code.append(select.getGroupBy().accept(this)); // .groupBy(...)
+            code.append(select.getGroupBy().accept(this));
         }
 
-        // AGGREGATION
         Set<String> aggregatedAliases = new HashSet<>();
         List<String> aggExprs = new ArrayList<>();
 
@@ -303,27 +311,14 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String> {
             code.append(".agg(").append(String.join(", ", aggExprs)).append(")");
         }
 
-        // HAVING (after .agg())
         if (select.getHaving() != null) {
-            code.append(select.getHaving().accept(this)); // .filter(...)
+            code.append(select.getHaving().accept(this));
         }
 
-        // ORDER BY
         if (select.getOrderBy() != null) {
             code.append(select.getOrderBy().accept(this));
         }
 
-        // LIMIT
-        if (select.getLimit() != null) {
-            code.append(select.getLimit().accept(this));
-        }
-
-        // OFFSET (emit as comment)
-        if (select.getOffset() != null) {
-            code.append("\n").append(select.getOffset().accept(this));
-        }
-
-        // FINAL SELECT
         if (!select.getSelectItems().isEmpty()) {
             List<String> projectionExprs = new ArrayList<>();
 
@@ -340,6 +335,13 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String> {
             code.append(".select(").append(String.join(", ", projectionExprs)).append(")");
         }
 
+        if (select.getLimit() != null) {
+            code.append(select.getLimit().accept(this));
+        }
+
+        if (select.getOffset() != null) {
+            code.append(select.getOffset().accept(this));
+        }
         return code.toString();
     }
 
@@ -370,17 +372,16 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String> {
                     : alias;
 
             if (!knownTables.containsKey(baseName)) {
-                emittedStatements.add("val " + baseName + " = // User needs to define this table");
+                unknownTableStatements.add("val " + baseName + " = // User needs to define this table");
                 knownTables.put(baseName, baseName);
             }
 
-            // Create alias if needed
             if (!alias.equals(baseName) && !knownTables.containsKey(alias)) {
                 alias = baseName + ".as(\"" + alias + "\")";
             }
         }
 
-        return alias; // This is used inside .join(...), etc.
+        return alias;
     }
 
     public String visit(WhereClause whereClause) {
@@ -405,23 +406,18 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String> {
 
     public String visit(WithStatement withStatement) {
         StringBuilder code = new StringBuilder();
-
         for (CommonTableExpression cte : withStatement.getCteList()) {
-            cte.accept(this); // Adds to emittedStatements
+            cte.accept(this);
         }
-
         String mainQuery = withStatement.getMainQuery().accept(this);
-
         code.append(mainQuery);
-
         return code.toString();
     }
 
     private boolean isAggregate(Expression expr) {
         if (expr instanceof FunctionCall) {
             String functionName =  ((Identifier) ((FunctionCall) expr).getFunction()).getValue().toLowerCase();
-            return functionName.equals("count") || functionName.equals("sum") || functionName.equals("avg")
-                    || functionName.equals("min") || functionName.equals("max");
+            return aggregateFunctions.contains(functionName);
         }
         return false;
     }

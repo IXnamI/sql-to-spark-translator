@@ -47,14 +47,16 @@ public class CodegenTest {
 
     @Test
     public void testSelectStatement() {
-        String input = "SELECT u.name, COUNT(o.id) AS order_count " +
-                "FROM users u " +
-                "JOIN orders o ON u.id = o.user_id " +
-                "WHERE u.active = true " +
-                "GROUP BY u.name " +
-                "HAVING COUNT(o.id) > 5 " +
-                "ORDER BY order_count DESC " +
-                "LIMIT 10 ";
+        String input = "SELECT \n" +
+                "    u.name, \n" +
+                "    COUNT(o.id) OVER (PARTITION BY u.name ORDER BY o.created_at) AS order_count \n" +
+                "FROM users u\n" +
+                "JOIN orders o ON u.id = o.user_id\n" +
+                "WHERE u.active = true\n" +
+                "GROUP BY u.name\n" +
+                "HAVING COUNT(o.id) > 5\n" +
+                "ORDER BY order_count DESC\n" +
+                "LIMIT 10";
         String generatedCode = generateCode(input);
         System.out.println(generatedCode);
     }

@@ -246,6 +246,10 @@ public class Parser {
             return functionCall;
         }
         functionCall.setArguments(parseCallArguments());
+        if (peekTokenIs(TokenType.OVER)) {
+            nextToken();
+            functionCall.setWindowClause((WindowClause) parseWindowClause());
+        }
         return functionCall;
     }
 
@@ -401,9 +405,8 @@ public class Parser {
         if (peekTokenIs(TokenType.ROWS) || peekTokenIs(TokenType.RANGE)) {
             nextToken();
             windowClause.setFrame((FrameClause) parseFrameClause());
-            if (!expectPeek(TokenType.RPAREN)) return null;
         }
-        if (!curTokenIs(TokenType.RPAREN)) return null;
+        if (!expectPeek(TokenType.RPAREN)) return null;
         return windowClause;
     }
 
