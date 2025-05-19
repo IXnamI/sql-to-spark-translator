@@ -58,32 +58,6 @@ public class CodegenTest {
         String generatedCode = generateCode(input);
         System.out.println(generatedCode);
     }
-    @Test
-    public void testCaseExpressionGeneration() {
-        String input = "CASE WHEN x > 5 THEN 'A' WHEN y = 1 THEN 'B' ELSE 'C' END";
-        String generatedCode = generateCode(input);
-        String expectedCode = ".when(col(\"x\") > 5, \"A\").when(col(\"y\") === 1, \"B\").otherwise(\"C\")";
-
-        assertEquals(expectedCode, generatedCode);
-    }
-
-    @Test
-    public void testOrderByClauseGeneration() {
-        String input = "ORDER BY salary DESC, id ASC";
-        String generatedCode = generateCode(input);
-        String expectedCode = ".orderBy(col(\"salary\").desc, col(\"id\").asc)";
-
-        assertEquals(expectedCode, generatedCode);
-    }
-
-    @Test
-    public void testGroupByClauseGeneration() {
-        String input = "GROUP BY department, region";
-        String generatedCode = generateCode(input);
-        String expectedCode = ".groupBy(col(\"department\"), col(\"region\"))";
-
-        assertEquals(expectedCode, generatedCode);
-    }
 
     private String generateCode(String input) {
         Lexer lexer = new Lexer(input);

@@ -16,8 +16,7 @@ A tool designed to converts standard SQL queries into equivalent Apache Spark co
 ## TODO: 
 
 - Support for all tokens available in the SQL syntax, ie: IN, VALUES, BETWEEN-AND, ...
-- Auto formatter of outputted code. 
-- Compression of unneeded generated code.
+- Better format on outputted code
 - Maybe translation into Spark Python.
 
 ---
@@ -32,12 +31,13 @@ A tool designed to converts standard SQL queries into equivalent Apache Spark co
 ## Build and Run
 
 ### Using Maven
-
 ```mvn clean package``` \
 ```java -cp target/sql-to-spark-1.0-SNAPSHOT.jar com.github.xnam.Main```
 
-### Running Tests
+### Running it
+```./sql2spark --input [your txt file here]```
 
+### Running Tests
 ```mvn test ```
 
 ---

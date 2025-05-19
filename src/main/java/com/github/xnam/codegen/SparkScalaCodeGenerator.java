@@ -350,7 +350,6 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String> {
     public String visit(TableSource tableSource) {
         StringBuilder declaration = new StringBuilder();
 
-        // Resolve alias
         String alias;
         if (tableSource.getAlias() != null) {
             alias = tableSource.getAlias().accept(this);
@@ -360,9 +359,8 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String> {
             alias = "df_" + System.currentTimeMillis();
         }
 
-        // Is it a subquery?
         if (tableSource.getTable() instanceof SelectStatement) {
-            String subqueryCode = ((SelectStatement) tableSource.getTable()).accept(this);
+            String subqueryCode = tableSource.getTable().accept(this);
             declaration.append("val ").append(alias).append(" = ").append(subqueryCode);
             knownTables.put(alias, alias);
             emittedStatements.add(declaration.toString());
@@ -371,7 +369,6 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String> {
                     ? ((Identifier) tableSource.getTable()).getValue()
                     : alias;
 
-            // Only declare the base table if not declared
             if (!knownTables.containsKey(baseName)) {
                 emittedStatements.add("val " + baseName + " = // User needs to define this table");
                 knownTables.put(baseName, baseName);
@@ -379,8 +376,7 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String> {
 
             // Create alias if needed
             if (!alias.equals(baseName) && !knownTables.containsKey(alias)) {
-                emittedStatements.add("val " + alias + " = " + baseName);
-                knownTables.put(alias, alias);
+                alias = baseName + ".as(\"" + alias + "\")";
             }
         }
 
@@ -410,12 +406,10 @@ public class SparkScalaCodeGenerator implements CodegenVisitor<String> {
     public String visit(WithStatement withStatement) {
         StringBuilder code = new StringBuilder();
 
-        // 1. Process all CTEs
         for (CommonTableExpression cte : withStatement.getCteList()) {
             cte.accept(this); // Adds to emittedStatements
         }
 
-        // 2. Main query (select or with-nested-select)
         String mainQuery = withStatement.getMainQuery().accept(this);
 
         code.append(mainQuery);
